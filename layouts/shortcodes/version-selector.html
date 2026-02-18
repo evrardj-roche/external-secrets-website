@@ -16,7 +16,7 @@
   <h2>Select a {{ $title }} Version</h2>
   <div class="version-cards">
     {{- range $versions -}}
-    <div class="version-card white">
+    <div class="version-card">
       <h3>
         <a href="{{ .url }}">{{ .version }}</a>
       </h3>
@@ -28,6 +28,22 @@
   </div>
 </div>
 <style>
+  :root {
+    --version-card-bg: #f8f9fa;
+    --version-card-border: #ddd;
+    --version-card-bg-hover: #fff;
+    --version-card-text: #333;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --version-card-bg: #2d2d2d;
+      --version-card-border: #444;
+      --version-card-bg-hover: #3d3d3d;
+      --version-card-text: #e0e0e0;
+    }
+  }
+
   .version-selector-container {
     margin: 3rem 0;
   }
@@ -39,15 +55,16 @@
   }
   .version-card {
     padding: 1.5rem;
-    border: 1px solid #ddd;
+    border: 1px solid var(--version-card-border);
     border-radius: 0.5rem;
-    background: #f8f9fa;
+    background: var(--version-card-bg);
+    color: var(--version-card-text);
     transition: all 0.2s ease;
   }
   .version-card:hover {
     border-color: #0d6efd;
     box-shadow: 0 4px 8px rgba(13, 110, 253, 0.15);
-    background: #fff;
+    background: var(--version-card-bg-hover);
   }
   .version-card h3 {
     margin: 0 0 0.5rem 0;
