@@ -63,6 +63,7 @@ version = "0.14.4-dev"
 versionWithBuildId = "0.14.4-dev"
 github_repo = "https://github.com/evrardj-roche/external-secrets-website"
 github_project_repo = "https://github.com/evrardj-roche/external-secrets"
+github_reloader_repo = "https://github.com/evrardj-roche/reloader"
 github_branch = "main"
 #gcs_engine_id = "d72aa9b2712488cc3"
 #offlineSearch = false
