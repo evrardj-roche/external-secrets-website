@@ -1,0 +1,16 @@
+# Hugo-generated assets
+.hugo_build.lock
+/public
+/resources
+
+# npm assets
+node_modules/
+package-lock.json
+
+# Local scratch folder
+/tmp
+
+# Apps & services
+/.netlify
+
+# cSpell:ignore hugo
