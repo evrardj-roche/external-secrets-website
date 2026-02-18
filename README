@@ -1,0 +1,18 @@
+# ESO Website
+
+## Contributing: Prepare for a new release
+
+1. Ensure you can run run scripts/new-version by adding it into your go.work
+
+go 1.25.7
+
+use (
+    .
+    ./scripts/new-version
+)
+
+2. Run `go run ./scripts/new-version --project eso --version v3.0`. For reloader, replace `eso` by `reloader`.
+
+3. Copy all the previous version files/add new version content. This will be further automated.
+
+4. Test the build locally, commit and submit a new PR.

@@ -1,0 +1,5 @@
+module github.com/evrardj-roche/external-secrets-website/scripts/new-version
+
+go 1.22
+
+require github.com/BurntSushi/toml v1.6.0
