@@ -1,6 +1,7 @@
+# This is fully copy pasted and adapted, as recommended by docsy website
 baseURL = 'https://preview.external-secrets.io/'
 languageCode = 'en-us'
-title = 'External Secrets Website'
+title = 'External Secrets'
 
 contentDir = "content/en"
 defaultContentLanguage = "en"
@@ -36,7 +37,6 @@ anchor = "smart"
 
 [languages.en]
 languageName = "English"
-title = "External Secrets Website"
 
 [languages.en.params]
 description = "Documentation website for ESO and other projects"
