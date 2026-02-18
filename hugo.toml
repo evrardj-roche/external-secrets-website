@@ -1,5 +1,5 @@
 # This is fully copy pasted and adapted, as recommended by docsy website
-baseURL = 'https://preview.external-secrets.io/'
+baseURL = 'https://localhost:1313/'
 languageCode = 'en-us'
 title = 'External Secrets'
 
@@ -57,10 +57,9 @@ section = [ "HTML", "print", "RSS" ]
 
 [params]
 #privacy_policy = "https://policies.google.com/privacy"
-version_menu = "Releases"
-archived_version = false
-version = "0.14.4-dev"
-versionWithBuildId = "0.14.4-dev"
+# Sentinel value for per-project version dropdowns
+# The actual version lists are in data/eso_versions.toml and data/reloader_versions.toml
+versions = [{ version = "", url = "" }]
 github_repo = "https://github.com/evrardj-roche/external-secrets-website"
 github_project_repo = "https://github.com/evrardj-roche/external-secrets"
 github_reloader_repo = "https://github.com/evrardj-roche/reloader"
@@ -96,6 +95,7 @@ sidebar_menu_foldable = true
 sidebar_menu_compact = false
 sidebar_search_disable = false
 showLightDarkModeMenu = true
+sidebar_root_enabled = true
 
   [params.ui.feedback]
   enable = true

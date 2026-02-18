@@ -1,0 +1,71 @@
+{{- $project := .Get 0 -}}
+{{- $versions := slice -}}
+{{- $title := "" -}}
+
+{{- if eq $project "eso" -}}
+  {{- $title = "External Secrets Operator" -}}
+  {{- with site.Data.eso_versions -}}{{- $versions = .versions -}}{{- end -}}
+{{- else if eq $project "reloader" -}}
+  {{- $title = "Reloader" -}}
+  {{- with site.Data.reloader_versions -}}{{- $versions = .versions -}}{{- end -}}
+{{- end -}}
+
+{{- if $versions -}}
+<section class="row td-box">
+<div class="version-selector-container container">
+  <h2>Select a {{ $title }} Version</h2>
+  <div class="version-cards">
+    {{- range $versions -}}
+    <div class="version-card white">
+      <h3>
+        <a href="{{ .url }}">{{ .version }}</a>
+      </h3>
+      {{- if .latest -}}
+      <span class="badge bg-success">Latest</span>
+      {{- end -}}
+    </div>
+    {{- end -}}
+  </div>
+</div>
+<style>
+  .version-selector-container {
+    margin: 3rem 0;
+  }
+  .version-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+  .version-card {
+    padding: 1.5rem;
+    border: 1px solid #ddd;
+    border-radius: 0.5rem;
+    background: #f8f9fa;
+    transition: all 0.2s ease;
+  }
+  .version-card:hover {
+    border-color: #0d6efd;
+    box-shadow: 0 4px 8px rgba(13, 110, 253, 0.15);
+    background: #fff;
+  }
+  .version-card h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+  }
+  .version-card a {
+    text-decoration: none;
+    color: inherit;
+  }
+  .version-card a:hover {
+    color: #0d6efd;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+</style>
+</section>
+{{- end -}}

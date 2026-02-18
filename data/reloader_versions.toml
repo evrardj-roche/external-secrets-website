@@ -1,0 +1,5 @@
+[[versions]]
+version = "v1.0 (latest)"
+url = "/reloader-docs/v1.0/"
+tag = "v1.0"
+latest = true

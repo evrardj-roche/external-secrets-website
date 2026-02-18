@@ -3,10 +3,7 @@ title = "Operator Documentation"
 linkTitle = "Operator Docs"
 
 [menu.main]
-weight = 20
-
-[[cascade]]
-type = "docs"
+weight = 10
 +++
 
-TODO
+{{< version-selector "eso" >}}

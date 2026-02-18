@@ -1,0 +1,27 @@
+{{- $project := "" -}}
+{{- $versions := slice -}}
+{{- $currentLabel := "Releases" -}}
+
+{{- if hasPrefix .RelPermalink "/eso-docs/" -}}
+  {{- $project = "eso" -}}
+  {{- with site.Data.eso_versions -}}{{- $versions = .versions -}}{{- end -}}
+  {{- with .Params.project_version -}}{{- $currentLabel = . -}}{{- end -}}
+{{- else if hasPrefix .RelPermalink "/reloader-docs/" -}}
+  {{- $project = "reloader" -}}
+  {{- with site.Data.reloader_versions -}}{{- $versions = .versions -}}{{- end -}}
+  {{- with .Params.project_version -}}{{- $currentLabel = . -}}{{- end -}}
+{{- end -}}
+
+{{- if $project -}}
+<div class="dropdown">
+  <a class="nav-link dropdown-toggle" href="#" role="button"
+     data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+    {{- $currentLabel -}}
+  </a>
+  <ul class="dropdown-menu">
+    {{- range $versions -}}
+    <li><a class="dropdown-item" href="{{ .url }}">{{ .version }}</a></li>
+    {{- end -}}
+  </ul>
+</div>
+{{- end -}}

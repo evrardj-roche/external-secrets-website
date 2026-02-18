@@ -3,10 +3,7 @@ title = "Reloader Documentation"
 linkTitle = "Reloader Docs"
 
 [menu.main]
-weight = 20
-
-[[cascade]]
-type = "docs"
+weight = 15
 +++
 
-TODO
+{{< version-selector "reloader" >}}

@@ -1,0 +1,16 @@
+{{- $esoLatest := "" -}}
+{{- range site.Data.eso_versions.versions -}}
+  {{- if .latest -}}{{- $esoLatest = .url -}}{{- end -}}
+{{- end -}}
+{{- $reloaderLatest := "" -}}
+{{- range site.Data.reloader_versions.versions -}}
+  {{- if .latest -}}{{- $reloaderLatest = .url -}}{{- end -}}
+{{- end -}}
+{{- if $esoLatest }}
+/eso-docs/    {{ $esoLatest }}  301
+/eso-docs/latest/    {{ $esoLatest }}  301
+{{- end }}
+{{- if $reloaderLatest }}
+/reloader-docs/    {{ $reloaderLatest }}  301
+/reloader-docs/latest/    {{ $reloaderLatest }}  301
+{{- end }}
