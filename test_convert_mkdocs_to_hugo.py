@@ -81,6 +81,64 @@ Some text
         result = clean_markdown_content(content)
         self.assertEqual(result, expected)
 
+    def test_remove_raw_tags(self):
+        content = '''{% raw %}
+apiVersion: v1
+kind: Secret
+'''
+        expected = '''
+apiVersion: v1
+kind: Secret
+'''
+        result = clean_markdown_content(content)
+        self.assertEqual(result, expected)
+
+    def test_remove_endraw_tags(self):
+        content = '''apiVersion: v1
+{% endraw %}
+```'''
+        expected = '''apiVersion: v1
+
+```'''
+        result = clean_markdown_content(content)
+        self.assertEqual(result, expected)
+
+    def test_remove_raw_tags_with_hyphens(self):
+        content = '''{%- raw %}
+content here
+{%- endraw %}'''
+        expected = '''
+content here
+'''
+        result = clean_markdown_content(content)
+        self.assertEqual(result, expected)
+
+    def test_remove_inline_raw_tags(self):
+        content = '''Use {% raw %}'{{ "" }}'{% endraw %} for empty body.'''
+        expected = '''Use '{{ "" }}' for empty body.'''
+        result = clean_markdown_content(content)
+        self.assertEqual(result, expected)
+
+    def test_remove_all_raw_tag_variations(self):
+        content = '''
+{%- raw %}
+{% raw %}
+{% raw -%}
+{%- raw -%}
+Some content
+{% endraw %}
+{%- endraw %}
+{% endraw -%}
+{%- endraw -%}
+'''
+        # All tags should be removed, leaving just "Some content"
+        result = clean_markdown_content(content)
+        self.assertNotIn('raw', result)
+        self.assertNotIn('endraw', result)
+        self.assertNotIn('{%', result)
+        self.assertNotIn('%}', result)
+        self.assertIn('Some content', result)
+
 
 class TestGenerateFrontMatter(unittest.TestCase):
     """Test TOML front matter generation."""
@@ -385,6 +443,40 @@ class TestCopySnippetsFolder(unittest.TestCase):
         result = copy_snippets_folder(self.source_dir, snippet_dest)
 
         self.assertFalse(result)
+
+    def test_copy_snippets_removes_raw_tags(self):
+        # Create snippets folder with files containing raw tags
+        snippets_dir = os.path.join(self.source_dir, 'snippets')
+        os.makedirs(snippets_dir)
+
+        snippet_content = '''{% raw %}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example
+spec:
+  url: "{{ .remoteRef.key }}"
+{%- endraw %}
+'''
+
+        with open(os.path.join(snippets_dir, 'test-snippet.yaml'), 'w') as f:
+            f.write(snippet_content)
+
+        # Copy snippets
+        snippet_dest = os.path.join(self.dest_dir, 'snippets')
+        result = copy_snippets_folder(self.source_dir, snippet_dest)
+
+        self.assertTrue(result)
+        self.assertTrue(os.path.exists(os.path.join(snippet_dest, 'test-snippet.yaml')))
+
+        # Verify raw tags are removed
+        with open(os.path.join(snippet_dest, 'test-snippet.yaml'), 'r') as f:
+            cleaned_content = f.read()
+
+        self.assertNotIn('{% raw %}', cleaned_content)
+        self.assertNotIn('{%- endraw %}', cleaned_content)
+        self.assertIn('apiVersion: v1', cleaned_content)
+        self.assertIn('{{ .remoteRef.key }}', cleaned_content)  # Template should remain
 
 
 class TestIntegrationScenarios(unittest.TestCase):
