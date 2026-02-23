@@ -21,3 +21,7 @@ use (
 
 1. Ensure data/${Y}_versions.toml contains X
 2. Ensure the folder content/en/${Y}-docs/${X} exists and contains an _index.md
+
+## Import old release
+
+python3 convert_mkdocs_to_hugo.py --config path-to-mkdocs.yml --source path-to-content/ --dest content/en/eso-docs/unreleased/ --assets static/ --snippet-destination-folder snippets/
