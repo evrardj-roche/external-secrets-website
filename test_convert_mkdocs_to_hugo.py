@@ -130,7 +130,7 @@ class TestReplaceYamlIncludes(unittest.TestCase):
         missing_snippets = []
         result = replace_yaml_includes(content, self.snippet_folder, missing_snippets, 'test.md')
 
-        expected = '{{% readfile file="test.yaml" %}}'
+        expected = '{{< readfile file=/snippets/test.yaml code="true" lang="yaml" >}}'
         self.assertEqual(result, expected)
         self.assertEqual(len(missing_snippets), 0)
 
@@ -141,7 +141,7 @@ class TestReplaceYamlIncludes(unittest.TestCase):
         missing_snippets = []
         result = replace_yaml_includes(content, self.snippet_folder, missing_snippets, 'test.md')
 
-        expected = '{{% readfile file="example.yaml" %}}'
+        expected = '{{< readfile file=/snippets/example.yaml code="true" lang="yaml" >}}'
         self.assertEqual(result, expected)
         self.assertEqual(len(missing_snippets), 0)
 
@@ -150,7 +150,7 @@ class TestReplaceYamlIncludes(unittest.TestCase):
         missing_snippets = []
         result = replace_yaml_includes(content, self.snippet_folder, missing_snippets, 'test.md')
 
-        expected = '{{% readfile file="test.yaml" %}}'
+        expected = '{{< readfile file=/snippets/test.yaml code="true" lang="yaml" >}}'
         self.assertEqual(result, expected)
         self.assertEqual(len(missing_snippets), 0)
 
@@ -159,7 +159,7 @@ class TestReplaceYamlIncludes(unittest.TestCase):
         missing_snippets = []
         result = replace_yaml_includes(content, self.snippet_folder, missing_snippets, 'test.md')
 
-        expected = '{{% readfile file="test.yaml" %}}'
+        expected = '{{< readfile file=/snippets/test.yaml code="true" lang="yaml" >}}'
         self.assertEqual(result, expected)
         self.assertEqual(len(missing_snippets), 0)
 
@@ -184,7 +184,7 @@ More text
         self.assertNotIn('{% include', result)
         self.assertNotIn('--8<--', result)
         self.assertNotIn('```yaml', result)
-        self.assertEqual(result.count('{{% readfile'), 3)
+        self.assertEqual(result.count('{{< readfile'), 3)
         self.assertEqual(len(missing_snippets), 0)
 
     def test_missing_snippet_is_tracked(self):
@@ -193,7 +193,7 @@ More text
         result = replace_yaml_includes(content, self.snippet_folder, missing_snippets, 'test.md')
 
         # Should still replace but track as missing
-        expected = '{{% readfile file="missing.yaml" %}}'
+        expected = '{{< readfile file=/snippets/missing.yaml code="true" lang="yaml" >}}'
         self.assertEqual(result, expected)
         self.assertEqual(len(missing_snippets), 1)
         self.assertEqual(missing_snippets[0]['snippet'], 'missing.yaml')
@@ -206,7 +206,7 @@ More text
         result = replace_yaml_includes(content, self.snippet_folder, missing_snippets, 'test.md')
 
         # Should use just the basename
-        expected = '{{% readfile file="test.yaml" %}}'
+        expected = '{{< readfile file=/snippets/test.yaml code="true" lang="yaml" >}}'
         self.assertEqual(result, expected)
         self.assertEqual(len(missing_snippets), 0)
 
@@ -369,13 +369,59 @@ Style test{: style="width:50%;"}
             self.assertNotIn('```yaml', content)  # YAML blocks around includes removed
 
             # Should have 3 readfile shortcodes
-            self.assertEqual(content.count('{{% readfile'), 3)
-            self.assertIn('{{% readfile file="config.yaml" %}}', content)
-            self.assertIn('{{% readfile file="secret.yaml" %}}', content)
-            self.assertIn('{{% readfile file="snippet.yaml" %}}', content)
+            self.assertEqual(content.count('{{< readfile'), 3)
+            self.assertIn('{{< readfile file=/snippets/config.yaml code="true" lang="yaml" >}}', content)
+            self.assertIn('{{< readfile file=/snippets/secret.yaml code="true" lang="yaml" >}}', content)
+            self.assertIn('{{< readfile file=/snippets/snippet.yaml code="true" lang="yaml" >}}', content)
 
             # No missing snippets
             self.assertEqual(len(missing_snippets), 0)
+
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def test_snippet_destination_folder_structure(self):
+        """Test that snippets are placed correctly for Hugo's readfile shortcode.
+
+        Hugo's readfile shortcode with file=/snippets/... expects files to be
+        at <hugo-project-root>/snippets/, not <hugo-project-root>/content/snippets/.
+        """
+        # Create temp Hugo-like structure
+        temp_dir = tempfile.mkdtemp()
+        source_dir = os.path.join(temp_dir, 'source')
+        hugo_root = os.path.join(temp_dir, 'hugo')
+
+        os.makedirs(source_dir)
+        os.makedirs(hugo_root)
+
+        # Create source snippets folder
+        source_snippets = os.path.join(source_dir, 'snippets')
+        os.makedirs(source_snippets)
+
+        test_content = 'apiVersion: v1\nkind: Secret'
+        with open(os.path.join(source_snippets, 'test.yaml'), 'w') as f:
+            f.write(test_content)
+
+        try:
+            # Copy snippets to Hugo root (NOT content/snippets)
+            hugo_snippets = os.path.join(hugo_root, 'snippets')
+            result = copy_snippets_folder(source_dir, hugo_snippets)
+
+            self.assertTrue(result)
+            self.assertTrue(os.path.exists(os.path.join(hugo_snippets, 'test.yaml')))
+
+            # Verify content
+            with open(os.path.join(hugo_snippets, 'test.yaml'), 'r') as f:
+                content = f.read()
+            self.assertEqual(content, test_content)
+
+            # Verify the readfile shortcode path matches
+            # The shortcode uses /snippets/test.yaml which resolves to
+            # <hugo-root>/snippets/test.yaml
+            shortcode_path = '/snippets/test.yaml'
+            # Simulate Hugo's fileExists check (relative to hugo_root)
+            actual_path = os.path.join(hugo_root, shortcode_path.lstrip('/'))
+            self.assertTrue(os.path.exists(actual_path))
 
         finally:
             shutil.rmtree(temp_dir)
