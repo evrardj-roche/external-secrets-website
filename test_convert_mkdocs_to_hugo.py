@@ -145,6 +145,19 @@ class TestReplaceYamlIncludes(unittest.TestCase):
         self.assertEqual(result, expected)
         self.assertEqual(len(missing_snippets), 0)
 
+    def test_jinja_include_with_yaml_block_and_trailing_colon(self):
+        content = '''```yaml
+{% include 'test.yaml' %}:
+```'''
+        missing_snippets = []
+        result = replace_yaml_includes(content, self.snippet_folder, missing_snippets, 'test.md')
+
+        expected = '{{< readfile file=/snippets/test.yaml code="true" lang="yaml" >}}'
+        self.assertEqual(result, expected)
+        self.assertEqual(len(missing_snippets), 0)
+        # Ensure yaml block is removed
+        self.assertNotIn('```yaml', result)
+
     def test_jinja_include_without_yaml_block(self):
         content = '{% include "test.yaml" %}'
         missing_snippets = []
@@ -320,6 +333,36 @@ class TestCopySnippetsFolder(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertTrue(os.path.exists(os.path.join(snippet_dest, 'provider', 'config.yaml')))
+
+    def test_copy_snippets_preserves_nested_structure(self):
+        # Create snippets folder with multiple nested levels
+        snippets_dir = os.path.join(self.source_dir, 'snippets')
+        gitops_dir = os.path.join(snippets_dir, 'gitops')
+        crs_dir = os.path.join(gitops_dir, 'crs')
+        os.makedirs(crs_dir)
+
+        # Create files at different levels
+        with open(os.path.join(snippets_dir, 'root.yaml'), 'w') as f:
+            f.write('root: file')
+        with open(os.path.join(gitops_dir, 'kustomization.yaml'), 'w') as f:
+            f.write('apiVersion: kustomize.config.k8s.io/v1beta1')
+        with open(os.path.join(crs_dir, 'secret.yaml'), 'w') as f:
+            f.write('apiVersion: v1\nkind: Secret')
+
+        # Copy snippets
+        snippet_dest = os.path.join(self.dest_dir, 'snippets')
+        result = copy_snippets_folder(self.source_dir, snippet_dest)
+
+        self.assertTrue(result)
+        # Verify all files exist at correct paths
+        self.assertTrue(os.path.exists(os.path.join(snippet_dest, 'root.yaml')))
+        self.assertTrue(os.path.exists(os.path.join(snippet_dest, 'gitops', 'kustomization.yaml')))
+        self.assertTrue(os.path.exists(os.path.join(snippet_dest, 'gitops', 'crs', 'secret.yaml')))
+
+        # Verify content is preserved
+        with open(os.path.join(snippet_dest, 'gitops', 'kustomization.yaml'), 'r') as f:
+            content = f.read()
+        self.assertEqual(content, 'apiVersion: kustomize.config.k8s.io/v1beta1')
 
     def test_copy_snippets_folder_not_exists(self):
         # No snippets folder in source
