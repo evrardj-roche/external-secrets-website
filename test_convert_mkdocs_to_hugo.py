@@ -199,16 +199,35 @@ More text
         self.assertEqual(missing_snippets[0]['snippet'], 'missing.yaml')
         self.assertEqual(missing_snippets[0]['referenced_in'], 'test.md')
 
-    def test_nested_path_extracts_basename(self):
-        # Even if include has a path, we should extract just the filename
-        content = '{% include "path/to/test.yaml" %}'
+    def test_nested_path_preserves_subdirectory(self):
+        # Create subdirectory structure
+        subdir = os.path.join(self.snippet_folder, 'gitops')
+        os.makedirs(subdir)
+        with open(os.path.join(subdir, 'kustomization.yaml'), 'w') as f:
+            f.write('apiVersion: kustomize.config.k8s.io/v1beta1')
+
+        # Include with subdirectory path
+        content = '{% include "gitops/kustomization.yaml" %}'
         missing_snippets = []
         result = replace_yaml_includes(content, self.snippet_folder, missing_snippets, 'test.md')
 
-        # Should use just the basename
-        expected = '{{< readfile file=/snippets/test.yaml code="true" lang="yaml" >}}'
+        # Should preserve the full path including subdirectory
+        expected = '{{< readfile file=/snippets/gitops/kustomization.yaml code="true" lang="yaml" >}}'
         self.assertEqual(result, expected)
         self.assertEqual(len(missing_snippets), 0)
+
+    def test_nested_path_missing_reports_full_path(self):
+        # Include with subdirectory path that doesn't exist
+        content = '{% include "path/to/missing.yaml" %}'
+        missing_snippets = []
+        result = replace_yaml_includes(content, self.snippet_folder, missing_snippets, 'test.md')
+
+        # Should still replace but track the full path as missing
+        expected = '{{< readfile file=/snippets/path/to/missing.yaml code="true" lang="yaml" >}}'
+        self.assertEqual(result, expected)
+        self.assertEqual(len(missing_snippets), 1)
+        self.assertEqual(missing_snippets[0]['snippet'], 'path/to/missing.yaml')
+        self.assertEqual(missing_snippets[0]['referenced_in'], 'test.md')
 
 
 class TestFindAssetInFolder(unittest.TestCase):

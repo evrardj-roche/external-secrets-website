@@ -455,6 +455,7 @@ def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_fil
     - MkDocs snippets syntax: --8<-- "path/to/file"
     - Jinja2 include syntax: {% include "path/to/file" %} or {% include 'path/to/file' %}
     - Removes surrounding ```yaml ``` code blocks if present
+    - Preserves subdirectory structure (e.g., 'gitops/file.yaml' -> /snippets/gitops/file.yaml)
 
     Args:
         content: Markdown content
@@ -467,20 +468,22 @@ def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_fil
     """
     def replace_include(match):
         snippet_path = match.group(1)
-        snippet_filename = os.path.basename(snippet_path)
+        # Preserve the full relative path (including subdirectories)
+        # e.g., 'gitops/kustomization.yaml' stays as 'gitops/kustomization.yaml'
 
-        # Check if snippet exists in destination folder
-        full_snippet_path = os.path.join(snippet_dest_folder, snippet_filename)
+        # Check if snippet exists in destination folder (using full path)
+        full_snippet_path = os.path.join(snippet_dest_folder, snippet_path)
 
         if not os.path.exists(full_snippet_path):
             missing_snippets.append({
-                'snippet': snippet_filename,
+                'snippet': snippet_path,
                 'referenced_in': md_filename
             })
 
         # Replace with Hugo readfile shortcode
         # Path /snippets/ is relative to Hugo project root
-        return f'{{{{< readfile file=/snippets/{snippet_filename} code="true" lang="yaml" >}}}}'
+        # Preserve subdirectory structure in the path
+        return f'{{{{< readfile file=/snippets/{snippet_path} code="true" lang="yaml" >}}}}'
 
     modified_content = content
 
