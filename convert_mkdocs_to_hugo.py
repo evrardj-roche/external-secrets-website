@@ -1,5 +1,46 @@
 #!/usr/bin/env python3
-"""Convert mkdocs site to Hugo with front matter."""
+"""Convert mkdocs site to Hugo with front matter.
+
+REQUIREMENTS:
+-------------
+1. Parse mkdocs.yml navigation structure to extract file hierarchy
+2. Generate TOML front matter (+++...+++) with:
+   - title: From nav display name
+   - linkTitle: Same as title
+   - weight: Position in nav (increments by 10)
+3. Preserve directory structure from mkdocs.yml (NOT flattened)
+4. Create _index.md files for each directory with:
+   - title: Section name from mkdocs.yml
+   - weight: Section position (first sections have lower weight)
+5. Migrate ALL markdown files:
+   - Files in mkdocs.yml nav: use their nav position for weight
+   - Files NOT in mkdocs.yml nav: assign higher weights (after matched files)
+6. Rewrite asset paths:
+   - Find assets in --assets-folder recursively
+   - Rewrite relative paths (../pictures/...) to absolute (/img/...)
+   - Handle URL-encoded filenames (e.g., %20 for spaces):
+     * Decode to find actual file
+     * Keep encoding in output path
+7. Clean markdown content:
+   - Strip existing YAML/TOML front matter (including hide_toc metadata)
+   - Remove <br> and <br /> tags
+   - Remove markdown style attributes (e.g., {: style="width:70%;"})
+8. Guard against failures:
+   - Handle missing assets gracefully (warn but continue)
+   - Catch errors in asset rewriting
+9. Output summary report:
+   - Total files processed (split by matched/unmatched)
+   - Assets report: tab-separated list (asset_filename<TAB>markdown_filename)
+   - List of files NOT in mkdocs.yml nav with their assigned weights
+
+USAGE:
+------
+python3 convert_mkdocs_to_hugo.py \\
+  --config path/to/mkdocs.yml \\
+  --source path/to/markdown/files/ \\
+  --dest path/to/destination/ \\
+  --assets-folder path/to/static/
+"""
 
 import argparse
 import os
