@@ -444,6 +444,40 @@ class TestCopySnippetsFolder(unittest.TestCase):
 
         self.assertFalse(result)
 
+    def test_copy_snippets_removes_raw_tags(self):
+        # Create snippets folder with files containing raw tags
+        snippets_dir = os.path.join(self.source_dir, 'snippets')
+        os.makedirs(snippets_dir)
+
+        snippet_content = '''{% raw %}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example
+spec:
+  url: "{{ .remoteRef.key }}"
+{%- endraw %}
+'''
+
+        with open(os.path.join(snippets_dir, 'test-snippet.yaml'), 'w') as f:
+            f.write(snippet_content)
+
+        # Copy snippets
+        snippet_dest = os.path.join(self.dest_dir, 'snippets')
+        result = copy_snippets_folder(self.source_dir, snippet_dest)
+
+        self.assertTrue(result)
+        self.assertTrue(os.path.exists(os.path.join(snippet_dest, 'test-snippet.yaml')))
+
+        # Verify raw tags are removed
+        with open(os.path.join(snippet_dest, 'test-snippet.yaml'), 'r') as f:
+            cleaned_content = f.read()
+
+        self.assertNotIn('{% raw %}', cleaned_content)
+        self.assertNotIn('{%- endraw %}', cleaned_content)
+        self.assertIn('apiVersion: v1', cleaned_content)
+        self.assertIn('{{ .remoteRef.key }}', cleaned_content)  # Template should remain
+
 
 class TestIntegrationScenarios(unittest.TestCase):
     """Integration tests for complete conversion scenarios."""

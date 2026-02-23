@@ -427,6 +427,8 @@ def clean_markdown_content(content):
 def copy_snippets_folder(source_dir, snippet_dest_folder):
     """Copy snippets folder from source to destination.
 
+    Cleans Jinja2 raw/endraw tags from snippet files during copy.
+
     Args:
         source_dir: Path to source directory (where mkdocs files are)
         snippet_dest_folder: Destination folder for snippets
@@ -443,16 +445,39 @@ def copy_snippets_folder(source_dir, snippet_dest_folder):
     os.makedirs(snippet_dest_folder, exist_ok=True)
 
     # Copy all files from snippets folder to destination
-    for item in os.listdir(snippets_path):
-        src_item = os.path.join(snippets_path, item)
-        dst_item = os.path.join(snippet_dest_folder, item)
+    for root, dirs, files in os.walk(snippets_path):
+        # Calculate relative path from snippets root
+        rel_path = os.path.relpath(root, snippets_path)
 
-        if os.path.isfile(src_item):
-            shutil.copy2(src_item, dst_item)
-        elif os.path.isdir(src_item):
-            if os.path.exists(dst_item):
-                shutil.rmtree(dst_item)
-            shutil.copytree(src_item, dst_item)
+        # Create destination directory structure
+        if rel_path != '.':
+            dest_dir = os.path.join(snippet_dest_folder, rel_path)
+        else:
+            dest_dir = snippet_dest_folder
+        os.makedirs(dest_dir, exist_ok=True)
+
+        # Process files
+        for filename in files:
+            src_file = os.path.join(root, filename)
+            if rel_path != '.':
+                dst_file = os.path.join(snippet_dest_folder, rel_path, filename)
+            else:
+                dst_file = os.path.join(snippet_dest_folder, filename)
+
+            # Read file content
+            try:
+                with open(src_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+
+                # Clean raw/endraw tags from snippet files
+                content = clean_markdown_content(content)
+
+                # Write cleaned content
+                with open(dst_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+            except (UnicodeDecodeError, IOError):
+                # If file is binary or can't be read as text, just copy it
+                shutil.copy2(src_file, dst_file)
 
     return True
 
