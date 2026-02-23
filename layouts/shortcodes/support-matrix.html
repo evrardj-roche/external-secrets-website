@@ -1,0 +1,65 @@
+{{- $project := .Get 0 -}}
+{{- $versions := slice -}}
+{{- $title := "" -}}
+
+{{- if eq $project "eso" -}}
+  {{- $title = "External Secrets Operator" -}}
+  {{- with site.Data.eso_versions -}}{{- $versions = .versions -}}{{- end -}}
+{{- else if eq $project "reloader" -}}
+  {{- $title = "Reloader" -}}
+  {{- with site.Data.reloader_versions -}}{{- $versions = .versions -}}{{- end -}}
+{{- end -}}
+
+{{- if $versions -}}
+<section class="row td-box">
+<div class="support-matrix-container container">
+  <table class="table table-striped table-hover">
+    <thead>
+      <tr>
+        <th>Version</th>
+        <th>Tested K8s Releases</th>
+        <th>Release Date</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{- range $versions -}}
+      <tr>
+        <td><a href="{{ .url }}">{{ .version }}</a></td>
+        <td>
+          {{- if .tested_k8s_versions -}}
+            {{- range $i, $k8s := .tested_k8s_versions -}}
+              {{- if $i }}, {{ end -}}
+              <code>{{ $k8s }}</code>
+            {{- end -}}
+          {{- else -}}
+            —
+          {{- end -}}
+        </td>
+        <td>
+          {{- if .release_date -}}
+            {{ .release_date }}
+          {{- else -}}
+            —
+          {{- end -}}
+        </td>
+        <td>
+          {{- if .end_of_life -}}
+            {{- if gt (now.Format "2006-01-02") .end_of_life -}}
+              <span class="badge bg-danger">EOL</span>
+            {{- else -}}
+              <span class="badge bg-warning">EOL {{ .end_of_life }}</span>
+            {{- end -}}
+          {{- else if .latest -}}
+            <span class="badge bg-success">Supported</span>
+          {{- else -}}
+            <span class="badge bg-secondary">Maintenance</span>
+          {{- end -}}
+        </td>
+      </tr>
+      {{- end -}}
+    </tbody>
+  </table>
+</div>
+</section>
+{{- end -}}

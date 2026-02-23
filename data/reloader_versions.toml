@@ -3,3 +3,6 @@ version = "v1.0 (latest)"
 url = "/reloader-docs/v1.0/"
 tag = "v1.0"
 latest = true
+release_date = "2024-02-01"
+tested_k8s_versions = ["1.26", "1.27", "1.28", "1.29"]
+end_of_life = ""

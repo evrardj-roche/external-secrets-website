@@ -7,3 +7,5 @@ weight = 10
 +++
 
 {{< version-selector "eso" >}}
+
+{{< support-matrix "eso" >}}
