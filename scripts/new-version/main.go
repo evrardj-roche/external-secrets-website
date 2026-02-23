@@ -20,7 +20,7 @@ const (
 	ReleaseLandingPageTemplate string = `+++
 title = "%s %s Documentation"
 linkTitle = "%s"
-weight = 1
+sidebar_root_for = "self"
 
 [[cascade]]
 type = "docs"
@@ -28,7 +28,6 @@ type = "docs"
   [cascade.params]
   project = "%s"
   project_version = "%s"
-  sidebar_root_for = "children"
 +++
 
 Welcome to the %s %s documentation.
