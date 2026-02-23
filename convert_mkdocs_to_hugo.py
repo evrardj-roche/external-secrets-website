@@ -360,6 +360,24 @@ def main():
     matched_files = set(file_metadata.keys())
     unmatched_files = all_md_files - matched_files
 
+    # Find maximum weight used in matched files
+    max_weight = max([meta['weight'] for meta in file_metadata.values()]) if file_metadata else 0
+
+    # Add unmatched files to file_metadata with higher weights
+    unmatched_weight = max_weight + 1000  # Start high to ensure they come after matched files
+    for unmatched_file in sorted(unmatched_files):
+        unmatched_weight += 10
+        # Derive title from filename
+        filename = os.path.basename(unmatched_file)
+        title = os.path.splitext(filename)[0].replace('-', ' ').replace('_', ' ').title()
+
+        file_metadata[unmatched_file] = {
+            'title': title,
+            'section': None,
+            'subsection': None,
+            'weight': unmatched_weight
+        }
+
     # Create _index.md files for directories
     print("Creating directory index files...")
     for dir_path, metadata in sorted(section_metadata.items()):
@@ -374,6 +392,8 @@ def main():
     # Convert files
     print("\nConverting markdown files...")
     converted_count = 0
+    converted_matched = 0
+    converted_unmatched = 0
     error_count = 0
 
     for filepath, metadata in file_metadata.items():
@@ -390,6 +410,12 @@ def main():
         try:
             convert_file(src_path, dst_path, metadata, args.assets_folder, assets_tracking)
             converted_count += 1
+
+            # Track whether this was matched or unmatched
+            if filepath in unmatched_files:
+                converted_unmatched += 1
+            else:
+                converted_matched += 1
         except Exception as e:
             print(f"Error converting {filepath}: {e}", file=sys.stderr)
             error_count += 1
@@ -398,8 +424,9 @@ def main():
     print("\n" + "="*70)
     print("CONVERSION SUMMARY")
     print("="*70)
-    print(f"Files processed: {converted_count}")
-    print(f"Files skipped: {len(unmatched_files)}")
+    print(f"Total files processed: {converted_count}")
+    print(f"  - Files in mkdocs.yml nav: {converted_matched}")
+    print(f"  - Files NOT in mkdocs.yml nav: {converted_unmatched}")
     print(f"Errors: {error_count}")
 
     if assets_tracking:
@@ -412,10 +439,12 @@ def main():
 
     if unmatched_files:
         print("\n" + "-"*70)
-        print("UNMATCHED FILES (not in mkdocs.yml nav)")
+        print("FILES NOT IN mkdocs.yml nav (migrated with higher weights)")
         print("-"*70)
         for unmatched in sorted(unmatched_files):
-            print(f"  {unmatched}")
+            # Get the weight assigned to this file
+            weight = file_metadata[unmatched]['weight']
+            print(f"  {unmatched} (weight: {weight})")
 
     print("\nConversion complete!")
 
