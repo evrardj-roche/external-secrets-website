@@ -1,8 +1,8 @@
 +++
 title = "External-Secrets Operator Documentation (Unreleased)"
-linkTitle = "unreleased"
+linkTitle = "ESO Documentation (unreleased)"
 weight = 1
-toc_hide = true
+sidebar_root_for = "self"
 
 [[cascade]]
 type = "docs"
@@ -10,7 +10,6 @@ type = "docs"
   [cascade.params]
   project = "external-secrets"
   project_version = "unreleased"
-  sidebar_root_for = "children"
 +++
 
 Welcome to the External-Secrets Operator documentation for our future release.
