@@ -7,6 +7,7 @@ import re
 import sys
 from pathlib import Path
 from collections import defaultdict
+from urllib.parse import unquote
 
 
 def parse_mkdocs_nav(yaml_path, source_dir):
@@ -198,15 +199,24 @@ def find_asset_in_folder(asset_filename, assets_folder):
     """Search for an asset file recursively in the assets folder.
 
     Returns:
-        str: Relative path from assets folder root, or None if not found
+        str: Relative path from assets folder root (URL-encoded), or None if not found
     """
     assets_path = Path(assets_folder)
 
-    # Search recursively for the file
+    # URL-decode the filename (handles %20 and other encoded chars)
+    decoded_filename = unquote(asset_filename)
+
+    # Search recursively for the file (try both encoded and decoded versions)
     for asset_file in assets_path.rglob('*'):
-        if asset_file.is_file() and asset_file.name == asset_filename:
-            # Return path relative to assets folder root
-            return '/' + str(asset_file.relative_to(assets_path))
+        if asset_file.is_file():
+            # Check both the original and decoded filename
+            if asset_file.name == asset_filename or asset_file.name == decoded_filename:
+                # Return path relative to assets folder root
+                # Keep spaces as %20 in the URL
+                relative_path = str(asset_file.relative_to(assets_path))
+                # URL encode spaces and other special characters
+                encoded_path = relative_path.replace(' ', '%20')
+                return '/' + encoded_path
 
     return None
 
@@ -234,49 +244,71 @@ def rewrite_asset_paths(content, assets_folder, assets_tracking, md_filename):
 
     for pattern in patterns:
         def replace_asset(match):
-            if pattern.startswith('!'):
-                # Markdown image format
-                alt_text = match.group(1)
-                asset_path = match.group(2)
+            try:
+                if pattern.startswith('!'):
+                    # Markdown image format
+                    alt_text = match.group(1)
+                    asset_path = match.group(2)
 
-                # Extract filename from path
-                asset_filename = os.path.basename(asset_path)
+                    # Extract filename from path and decode URL encoding
+                    asset_filename = os.path.basename(asset_path)
 
-                # Skip external URLs
-                if asset_path.startswith('http://') or asset_path.startswith('https://'):
-                    return match.group(0)
+                    # Skip external URLs
+                    if asset_path.startswith('http://') or asset_path.startswith('https://'):
+                        return match.group(0)
 
-                # Find asset in assets folder
-                new_path = find_asset_in_folder(asset_filename, assets_folder)
+                    # Skip if asset_path is empty or just whitespace
+                    if not asset_filename or not asset_filename.strip():
+                        return match.group(0)
 
-                if new_path:
-                    # Track this asset
-                    assets_tracking[asset_filename].add(md_filename)
-                    return f'![{alt_text}]({new_path})'
+                    # Find asset in assets folder
+                    new_path = find_asset_in_folder(asset_filename, assets_folder)
+
+                    if new_path:
+                        # Track this asset (using decoded name for readability)
+                        decoded_filename = unquote(asset_filename)
+                        assets_tracking[decoded_filename].add(md_filename)
+                        return f'![{alt_text}]({new_path})'
+                    else:
+                        # Keep original path but warn
+                        decoded_filename = unquote(asset_filename)
+                        print(f"Warning: Asset '{decoded_filename}' referenced in '{md_filename}' not found in assets folder", file=sys.stderr)
+                        return match.group(0)
                 else:
-                    print(f"Warning: Asset '{asset_filename}' referenced in '{md_filename}' not found in assets folder", file=sys.stderr)
-                    return match.group(0)
-            else:
-                # HTML img tag format
-                asset_path = match.group(1)
-                asset_filename = os.path.basename(asset_path)
+                    # HTML img tag format
+                    asset_path = match.group(1)
+                    asset_filename = os.path.basename(asset_path)
 
-                # Skip external URLs
-                if asset_path.startswith('http://') or asset_path.startswith('https://'):
-                    return match.group(0)
+                    # Skip external URLs
+                    if asset_path.startswith('http://') or asset_path.startswith('https://'):
+                        return match.group(0)
 
-                # Find asset in assets folder
-                new_path = find_asset_in_folder(asset_filename, assets_folder)
+                    # Skip if asset_path is empty or just whitespace
+                    if not asset_filename or not asset_filename.strip():
+                        return match.group(0)
 
-                if new_path:
-                    # Track this asset
-                    assets_tracking[asset_filename].add(md_filename)
-                    return match.group(0).replace(asset_path, new_path)
-                else:
-                    print(f"Warning: Asset '{asset_filename}' referenced in '{md_filename}' not found in assets folder", file=sys.stderr)
-                    return match.group(0)
+                    # Find asset in assets folder
+                    new_path = find_asset_in_folder(asset_filename, assets_folder)
 
-        modified_content = re.sub(pattern, replace_asset, modified_content)
+                    if new_path:
+                        # Track this asset (using decoded name for readability)
+                        decoded_filename = unquote(asset_filename)
+                        assets_tracking[decoded_filename].add(md_filename)
+                        return match.group(0).replace(asset_path, new_path)
+                    else:
+                        # Keep original path but warn
+                        decoded_filename = unquote(asset_filename)
+                        print(f"Warning: Asset '{decoded_filename}' referenced in '{md_filename}' not found in assets folder", file=sys.stderr)
+                        return match.group(0)
+            except Exception as e:
+                # Guard against any regex or processing errors
+                print(f"Error processing asset in '{md_filename}': {e}", file=sys.stderr)
+                return match.group(0)
+
+        try:
+            modified_content = re.sub(pattern, replace_asset, modified_content)
+        except Exception as e:
+            print(f"Error rewriting assets in '{md_filename}': {e}", file=sys.stderr)
 
     return modified_content
 
@@ -298,11 +330,41 @@ weight = {weight}
         f.write(content)
 
 
+def strip_existing_front_matter(content):
+    """Remove existing YAML or TOML front matter from content."""
+    # Strip YAML front matter (--- ... ---)
+    yaml_pattern = r'^---\s*\n.*?\n---\s*\n'
+    content = re.sub(yaml_pattern, '', content, flags=re.DOTALL)
+
+    # Strip TOML front matter (+++ ... +++)
+    toml_pattern = r'^\+\+\+\s*\n.*?\n\+\+\+\s*\n'
+    content = re.sub(toml_pattern, '', content, flags=re.DOTALL)
+
+    return content
+
+
+def clean_markdown_content(content):
+    """Remove unwanted HTML and markdown attributes."""
+    # Remove <br> and <br /> tags
+    content = re.sub(r'<br\s*/?>', '', content, flags=re.IGNORECASE)
+
+    # Remove markdown style attributes like {: style="width:70%;"}
+    content = re.sub(r'\{:\s*style="[^"]*"\s*\}', '', content)
+
+    return content
+
+
 def convert_file(src_path, dst_path, metadata, assets_folder, assets_tracking):
     """Read source, prepend front matter, rewrite assets, write to destination."""
     # Read source file
     with open(src_path, 'r', encoding='utf-8') as f:
         content = f.read()
+
+    # Strip any existing front matter (including hide_toc metadata)
+    content = strip_existing_front_matter(content)
+
+    # Clean markdown content (remove <br>, style attributes, etc.)
+    content = clean_markdown_content(content)
 
     # Generate front matter
     front_matter = generate_front_matter(metadata)
