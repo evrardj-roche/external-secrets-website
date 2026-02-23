@@ -445,7 +445,7 @@ Users have different preferences on what metadata should be pushed. ESO, by defa
 You can specify the metadata in the `spec.template.metadata` section if you want to decouple it from the existing secret.
 
 ```yaml
-{% raw %}
+
 apiVersion: external-secrets.io/v1alpha1
 kind: PushSecret
 metadata:
@@ -464,7 +464,7 @@ spec:
       remoteRef:
         remoteKey: backend_secrets
         property: mysql_connection_string
-{% endraw %}
+
 ```
 
 Further, you can leverage the `.data[].metadata` section to fine-tine the behavior of the metadata merge strategy. The metadata section is a versioned custom-resource _similar_ structure, the behavior is detailed below.

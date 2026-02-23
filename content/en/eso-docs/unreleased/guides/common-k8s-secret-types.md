@@ -40,7 +40,7 @@ kubectl get secret secret-to-be-created -n <namespace> -o jsonpath="{.data.\.doc
 Alternately, if you only have the container registry name and password value, you can take advantage of the advanced ExternalSecret templating functions to create the secret:
 
 ```yaml
-{% raw %}
+
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -65,7 +65,7 @@ spec:
   - secretKey: password
     remoteRef:
       key: secret/docker-registry-password
-{% endraw %}
+
 ```
 
 ## TLS Cert example
