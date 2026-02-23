@@ -22,22 +22,16 @@ Each data value is interpreted as a [Go template](https://golang.org/pkg/text/te
 ## Examples
 
 You can use templates to inject your secrets into a configuration file that you mount into your pod:
-``` yaml
 {{< readfile file=/snippets/multiline-template-v1-external-secret.yaml code="true" lang="yaml" >}}
-```
 
 You can also use pre-defined functions to extract data from your secrets. Here: extract key/cert from a pkcs12 archive and store it as PEM.
-``` yaml
 {{< readfile file=/snippets/pkcs12-template-v1-external-secret.yaml code="true" lang="yaml" >}}
-```
 
 ### TemplateFrom
 
 You do not have to define your templates inline in an ExternalSecret but you can pull `ConfigMaps` or other Secrets that contain a template. Consider the following example:
 
-``` yaml
 {{< readfile file=/snippets/template-v1-from-secret.yaml code="true" lang="yaml" >}}
-```
 
 ## Helper functions
 We provide a bunch of convenience functions that help you transform your secrets. A secret value is a `[]byte`.

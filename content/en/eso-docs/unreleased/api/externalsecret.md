@@ -103,6 +103,4 @@ Individual features are described in the [Guides section](../guides/introduction
 Take a look at an annotated example to understand the design behind the
 `ExternalSecret`.
 
-``` yaml
 {{< readfile file=/snippets/full-external-secret.yaml code="true" lang="yaml" >}}
-```

@@ -16,9 +16,7 @@ The `PushSecret` is namespaced and it describes what data should be pushed to th
 
 Below is an example of the `PushSecret` in use.
 
-``` yaml
 {{< readfile file=/snippets/full-pushsecret.yaml code="true" lang="yaml" >}}
-```
 
 The result of the created Secret object will look like:
 

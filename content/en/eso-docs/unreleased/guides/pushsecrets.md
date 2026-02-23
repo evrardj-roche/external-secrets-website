@@ -12,9 +12,7 @@ The update behavior of `PushSecret` is controlled by `spec.updatePolicy`. The de
 By default, the secret created in the secret provided will not be deleted even after deleting the `PushSecret`, unless you set `spec.deletionPolicy` to `Delete`.
 
 
-``` yaml
 {{< readfile file=/snippets/full-pushsecret.yaml code="true" lang="yaml" >}}
-```
 
 ## Backup use case
 

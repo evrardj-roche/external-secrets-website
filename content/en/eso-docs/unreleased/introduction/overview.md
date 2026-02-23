@@ -36,9 +36,7 @@ authentication/access and the actual Secret and configuration needed for
 workloads. The ExternalSecret specifies what to fetch, the SecretStore specifies
 how to access. This resource is namespaced.
 
-``` yaml
 {{< readfile file=/snippets/basic-secret-store.yaml code="true" lang="yaml" >}}
-```
 The `SecretStore` contains references to secrets which hold credentials to
 access the external API.
 
@@ -47,9 +45,7 @@ An [ExternalSecret](../api/externalsecret.md) declares what data to fetch. It ha
 `SecretStore` which knows how to access that data. The controller uses that
 `ExternalSecret` as a blueprint to create secrets.
 
-``` yaml
 {{< readfile file=/snippets/basic-external-secret.yaml code="true" lang="yaml" >}}
-```
 
 ### ClusterSecretStore
 

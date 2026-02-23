@@ -624,17 +624,13 @@ To sync one or more secrets individually, use the following YAML:
 
 To sync all secrets from an Infisical project, use the following YAML:
 
-``` yaml
 {{< readfile file=/snippets/infisical-fetch-all-secrets.yaml code="true" lang="yaml" >}}
-```
 
 ### Filtering Secrets
 
 To filter secrets by `path` (path prefix) and `name` (regular expression):
 
-``` yaml
 {{< readfile file=/snippets/infisical-filtered-secrets.yaml code="true" lang="yaml" >}}
-```
 
 ---
 

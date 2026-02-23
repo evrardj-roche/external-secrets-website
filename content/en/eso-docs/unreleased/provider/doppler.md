@@ -81,9 +81,7 @@ Let's explore each use case using a fictional `auth-api` Doppler project.
 
 To sync one or more individual secrets:
 
-``` yaml
 {{< readfile file=/snippets/doppler-fetch-secret.yaml code="true" lang="yaml" >}}
-```
 
 ![Doppler fetch](/img/doppler-fetch.png)
 
@@ -91,9 +89,7 @@ To sync one or more individual secrets:
 
 To sync every secret from a config:
 
-``` yaml
 {{< readfile file=/snippets/doppler-fetch-all-secrets.yaml code="true" lang="yaml" >}}
-```
 
 ![Doppler fetch all](/img/doppler-fetch-all.png)
 
@@ -101,9 +97,7 @@ To sync every secret from a config:
 
 To filter secrets by `path` (path prefix), `name` (regular expression) or a combination of both:
 
-``` yaml
 {{< readfile file=/snippets/doppler-filtered-secrets.yaml code="true" lang="yaml" >}}
-```
 
 ![Doppler filter](/img/doppler-filter.png)
 
@@ -111,9 +105,7 @@ To filter secrets by `path` (path prefix), `name` (regular expression) or a comb
 
 To parse a JSON secret to its key-value pairs:
 
-``` yaml
 {{< readfile file=/snippets/doppler-parse-json-secret.yaml code="true" lang="yaml" >}}
-```
 
 ![Doppler JSON Secret](/img/doppler-json.png)
 

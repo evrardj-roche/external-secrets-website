@@ -22,15 +22,11 @@ Here are some examples of SecretText with the Hashicorp Vault and AWS External S
 
 #### Hashicorp Vault
 
-``` yaml
 {{< readfile file=/snippets/vault-jenkins-credential-sonarqube-api-token-external-secret.yaml code="true" lang="yaml" >}}
-```
 
 #### AWS Secrets Manager
 
-``` yaml
 {{< readfile file=/snippets/aws-jenkins-credential-sonarqube-api-token-external-secret.yaml code="true" lang="yaml" >}}
-```
 
 
 ### UsernamePassword
@@ -40,15 +36,11 @@ Here are some examples of UsernamePassword credentials with the Hashicorp Vault 
 
 #### Hashicorp Vault
 
-``` yaml
 {{< readfile file=/snippets/vault-jenkins-credential-harbor-chart-robot-external-secret.yaml code="true" lang="yaml" >}}
-```
 
 #### AWS Secrets Manager
 
-``` yaml
 {{< readfile file=/snippets/aws-jenkins-credentials-harbor-chart-robot-external-secret.yaml code="true" lang="yaml" >}}
-```
 
 
 
@@ -59,13 +51,9 @@ Here are some examples of basicSSHUserPrivateKey credentials with the Hashicorp 
 
 #### Hashicorp Vault
 
-``` yaml
 {{< readfile file=/snippets/vault-jenkins-credential-github-ssh-access-external-secret.yaml code="true" lang="yaml" >}}
-```
 
 #### AWS Secrets Manager
 
-``` yaml
 {{< readfile file=/snippets/aws-jenkins-credential-github-ssh-external-secret.yaml code="true" lang="yaml" >}}
-```
 

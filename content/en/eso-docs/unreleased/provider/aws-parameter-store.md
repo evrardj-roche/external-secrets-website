@@ -14,9 +14,7 @@ defined region. You should define Roles that define fine-grained access to
 individual secrets and pass them to ESO using `spec.provider.aws.role`. This
 way users of the `SecretStore` can only access the secrets necessary.
 
-``` yaml
 {{< readfile file=/snippets/aws-parameter-store.yaml code="true" lang="yaml" >}}
-```
 
 **NOTE:** In case of a `ClusterSecretStore`, Be sure to provide `namespace` in `accessKeyIDSecretRef` and `secretAccessKeySecretRef`  with the namespaces where the secrets reside.
 

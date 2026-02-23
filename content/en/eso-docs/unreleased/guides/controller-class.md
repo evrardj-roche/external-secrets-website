@@ -16,9 +16,7 @@ In order to deploy the controller with a specific class, install the helm charts
 ```
 helm install custom-external-secrets external-secrets/external-secrets --set controllerClass=custom
 ```
-``` yaml
 {{< readfile file=/snippets/controller-class-store.yaml code="true" lang="yaml" >}}
-```
 
 Now, any `ExternalSecret` bound to this secret store will be evaluated by the operator with the controllerClass custom.
 

@@ -27,6 +27,4 @@ To check the full list, please see [Stability Support](../introduction/stability
 
 For a full list of supported fields see [spec](spec.md) or dig into our [guides](../guides/introduction.md).
 
-``` yaml
 {{< readfile file=/snippets/full-secret-store.yaml code="true" lang="yaml" >}}
-```

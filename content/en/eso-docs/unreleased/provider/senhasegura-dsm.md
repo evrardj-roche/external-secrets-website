@@ -27,15 +27,11 @@ To sync secrets between Segura® DSM and Kubernetes with External Secrets, you n
 
 ### SecretStore
 
-``` yaml
 {{< readfile file=/snippets/senhasegura-dsm-secretstore.yaml code="true" lang="yaml" >}}
-```
 
 ### ClusterSecretStore
 
-``` yaml
 {{< readfile file=/snippets/senhasegura-dsm-clustersecretstore.yaml code="true" lang="yaml" >}}
-```
 
 ---
 
@@ -89,9 +85,7 @@ If you only need a specific key, you can select it using remoteRef.property as t
 
 In this method, you can overwrites data name in Kubernetes Secret object (e.g API_SETTINGS and API_SETTINGS_TOKEN)
 
-``` yaml
 {{< readfile file=/snippets/senhasegura-dsm-external-secret-single.yaml code="true" lang="yaml" >}}
-```
 
 Kubernetes Secret will be create with follow `.data.X`
 
@@ -108,9 +102,7 @@ If your app requires multiples secrets, it is not required to create multiple Ex
 
 In this method, every secret data in Segura® creates a Kubernetes Secret `.data.X` field
 
-``` yaml
 {{< readfile file=/snippets/senhasegura-dsm-external-secret-multiple.yaml code="true" lang="yaml" >}}
-```
 
 Kubernetes Secret will be created with the following `.data.X`
 
@@ -129,9 +121,7 @@ DB_PASSWORD='example'
 
 You can sync all secrets that your authorization in DSM has using find, in a future release you will be able to filter secrets by name, path or tags
 
-``` yaml
 {{< readfile file=/snippets/senhasegura-dsm-external-secret-all.yaml code="true" lang="yaml" >}}
-```
 
 Kubernetes Secret will be created with the following `.data.X`
 

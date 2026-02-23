@@ -14,9 +14,7 @@ defined region. You should define Roles that define fine-grained access to
 individual secrets and pass them to ESO using `spec.provider.aws.role`. This
 way users of the `SecretStore` can only access the secrets necessary.
 
-``` yaml
 {{< readfile file=/snippets/aws-sm-store.yaml code="true" lang="yaml" >}}
-```
 **NOTE:** In case of a `ClusterSecretStore`, Be sure to provide `namespace` in `accessKeyIDSecretRef` and `secretAccessKeySecretRef`  with the namespaces where the secrets reside.
 
 **NOTE:** When using `dataFrom` without a `path` defined, the provider will fall back to using `ListSecrets`. `ListSecrets`
@@ -234,9 +232,7 @@ Consider the following JSON object that is stored in the SecretsManager key `fri
 
 This is an example on how you would look up nested keys in the above json object:
 
-``` yaml
 {{< readfile file=/snippets/aws-sm-external-secret.yaml code="true" lang="yaml" >}}
-```
 
 ### Secret Versions
 
@@ -291,4 +287,3 @@ spec:
       key: "production/api-key"
       version: "uuid/123e4567-e89b-12d3-a456-426614174000"
 ```
-

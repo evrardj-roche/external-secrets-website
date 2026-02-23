@@ -24,14 +24,10 @@ You can use an **ExternalSecret** to automatically fetch these credentials from 
 
 #### Hashicorp Vault
 
-``` yaml
 {{< readfile file=/snippets/vault-anchore-engine-access-credentials-external-secret.yaml code="true" lang="yaml" >}}
-```
 
 
 #### AWS Secrets Manager
 
-``` yaml
 {{< readfile file=/snippets/aws-anchore-engine-access-credentials-external-secret.yaml code="true" lang="yaml" >}}
-```
 
