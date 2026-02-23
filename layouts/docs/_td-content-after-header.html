@@ -1,0 +1,44 @@
+{{- if or (hasPrefix .RelPermalink "/reloader-docs/unreleased/") (hasPrefix .RelPermalink "/eso-docs/unreleased/")  -}}
+<style>
+  :root {
+    --unreleased-banner-bg: #fff3cd;
+    --unreleased-banner-border: #ffc107;
+    --unreleased-banner-text: #856404;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --unreleased-banner-bg: #664d03;
+      --unreleased-banner-border: #ffc107;
+      --unreleased-banner-text: #ffecb5;
+    }
+  }
+
+  .unreleased-banner {
+    background-color: var(--unreleased-banner-bg);
+    border-left: 4px solid var(--unreleased-banner-border);
+    border-radius: 0.25rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .unreleased-banner::before {
+    content: "⚠️";
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+
+  .unreleased-banner h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--unreleased-banner-text);
+  }
+</style>
+<div class="unreleased-banner">
+    <h3>You are viewing documentation for an <strong>unreleased</strong> version</h3>
+</div>
+{{- end -}}

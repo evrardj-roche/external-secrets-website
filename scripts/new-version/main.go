@@ -139,6 +139,8 @@ func main() {
 	fmt.Printf("Current latest: %s -> %s\n", oldLatest.Tag, oldLatest.Version)
 	fmt.Printf("New version: %s\n", *version)
 
+	fmt.Printf("Update versions file for release %s", *version)
+
 	// Update data file: mark old as not latest, add new version
 	versions.Versions[oldLatestIdx].Latest = false
 	versions.Versions[oldLatestIdx].Version = strings.TrimSuffix(oldLatest.Version, " (latest)")
@@ -159,12 +161,20 @@ func main() {
 	}
 	fmt.Printf("Updated %s\n", dataFile)
 
-	// Create new version directory
 	newVersionDir := filepath.Join(baseDir, *version)
+
+	fmt.Printf("Creating release directory %s\n", newVersionDir)
 	errMkdir := os.MkdirAll(newVersionDir, 0755)
 	if errMkdir != nil {
 		log.Fatal(errMkdir)
 	}
+
+	fmt.Printf("Copying recursively all the unreleased content to release")
+	if errCopy := CopyDir(filepath.Join(baseDir, "unreleased"), filepath.Join(newVersionDir)); errCopy != nil {
+		log.Fatalf("Issue occured while copying unreleased folder to release folder %s, %v", newVersionDir, errCopy)
+	}
+
+	fmt.Print("Overriding unreleased metadata with new release info\n")
 
 	// Create new version _index.md
 	newVersionPath := filepath.Join(newVersionDir, "_index.md")
@@ -173,9 +183,9 @@ func main() {
 	if err := os.WriteFile(newVersionPath, []byte(content), 0644); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Created %s\n", newVersionPath)
+	fmt.Printf("Overwritten %s\n", newVersionPath)
 
-	// Update project root _index.md with new latest version link
+	fmt.Printf("Update project root _index.md with new latest version link")
 	if err := updateProjectIndex(projectIndexFile, *project, *version); err != nil {
 		log.Fatal(err)
 	}
@@ -184,8 +194,7 @@ func main() {
 	fmt.Printf("\nRelease %s prepared successfully!\n", *version)
 	fmt.Printf("Next steps:\n")
 	fmt.Printf("1. Review the changes\n")
-	fmt.Printf("2. Add content to %s\n", newVersionDir)
-	fmt.Printf("3. Commit and push\n")
+	fmt.Printf("2. Commit and push\n")
 }
 
 func readVersions(filename string) (*VersionsData, error) {

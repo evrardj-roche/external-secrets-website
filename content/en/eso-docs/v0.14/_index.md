@@ -1,5 +1,5 @@
 +++
-title = "External-Secrets Operator Documentaation for v0.14"
+title = "External-Secrets Operator Documentation for v0.14"
 linkTitle = "v0.14"
 weight = 1
 
