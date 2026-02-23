@@ -7,3 +7,5 @@ weight = 15
 +++
 
 {{< version-selector "reloader" >}}
+
+{{< support-matrix "reloader" >}}

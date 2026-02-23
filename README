@@ -16,3 +16,8 @@ use (
 3. Copy all the previous version files/add new version content. This will be further automated.
 
 4. Test the build locally, commit and submit a new PR.
+
+## Check a version X for project Y (eso, relaoder) is already documented
+
+1. Ensure data/${Y}_versions.toml contains X
+2. Ensure the folder content/en/${Y}-docs/${X} exists and contains an _index.md

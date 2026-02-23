@@ -1,5 +1,8 @@
 [[versions]]
-version = "v0.14 (latest)"
-url = "/eso-docs/v0.14/"
-tag = "v0.14"
-latest = true
+  version = "v1.0.0 (latest)"
+  url = "/eso-docs/v1.0.0/"
+  tag = "v1.0.0"
+  latest = true
+  release_date = "2026-02-23"
+  tested_k8s_versions = ["v0.134.1"]
+  end_of_life = ""

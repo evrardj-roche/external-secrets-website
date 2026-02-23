@@ -1,5 +1,5 @@
 +++
-title = "ESO v0.14 Documentation"
+title = "External-Secrets Operator Documentaation for v0.14"
 linkTitle = "v0.14"
 weight = 1
 
@@ -7,9 +7,9 @@ weight = 1
 type = "docs"
 
   [cascade.params]
-  project = "eso"
+  project = "external-secrets"
   project_version = "v0.14"
   sidebar_root_for = "children"
 +++
 
-Welcome to the ESO v0.14 documentation.
+Welcome to the External-Secrets Operator v0.14 documentation.
