@@ -25,13 +25,21 @@ REQUIREMENTS:
    - Strip existing YAML/TOML front matter (including hide_toc metadata)
    - Remove <br> and <br /> tags
    - Remove markdown style attributes (e.g., {: style="width:70%;"})
-8. Guard against failures:
+8. Handle code snippets:
+   - Copy snippets folder from source to snippet-destination-folder if it exists
+   - Replace include blocks with Hugo readfile shortcode ({{% readfile file="..." %}}):
+     * MkDocs snippets: --8<-- "file"
+     * Jinja2 includes: {% include "file" %}
+   - Validate that referenced snippets exist in destination folder
+   - Report missing snippet references at end of run
+9. Guard against failures:
    - Handle missing assets gracefully (warn but continue)
    - Catch errors in asset rewriting
-9. Output summary report:
+10. Output summary report:
    - Total files processed (split by matched/unmatched)
    - Assets report: tab-separated list (asset_filename<TAB>markdown_filename)
    - List of files NOT in mkdocs.yml nav with their assigned weights
+   - List of missing snippet references
 
 USAGE:
 ------
@@ -39,13 +47,15 @@ python3 convert_mkdocs_to_hugo.py \\
   --config path/to/mkdocs.yml \\
   --source path/to/markdown/files/ \\
   --dest path/to/destination/ \\
-  --assets-folder path/to/static/
+  --assets-folder path/to/static/ \\
+  --snippet-destination-folder path/to/snippets/
 """
 
 import argparse
 import os
 import re
 import sys
+import shutil
 from pathlib import Path
 from collections import defaultdict
 from urllib.parse import unquote
@@ -395,7 +405,91 @@ def clean_markdown_content(content):
     return content
 
 
-def convert_file(src_path, dst_path, metadata, assets_folder, assets_tracking):
+def copy_snippets_folder(source_dir, snippet_dest_folder):
+    """Copy snippets folder from source to destination.
+
+    Args:
+        source_dir: Path to source directory (where mkdocs files are)
+        snippet_dest_folder: Destination folder for snippets
+
+    Returns:
+        bool: True if snippets folder was found and copied, False otherwise
+    """
+    snippets_path = os.path.join(source_dir, 'snippets')
+
+    if not os.path.exists(snippets_path) or not os.path.isdir(snippets_path):
+        return False
+
+    # Create destination directory if it doesn't exist
+    os.makedirs(snippet_dest_folder, exist_ok=True)
+
+    # Copy all files from snippets folder to destination
+    for item in os.listdir(snippets_path):
+        src_item = os.path.join(snippets_path, item)
+        dst_item = os.path.join(snippet_dest_folder, item)
+
+        if os.path.isfile(src_item):
+            shutil.copy2(src_item, dst_item)
+        elif os.path.isdir(src_item):
+            if os.path.exists(dst_item):
+                shutil.rmtree(dst_item)
+            shutil.copytree(src_item, dst_item)
+
+    return True
+
+
+def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_filename):
+    """Replace include blocks with Hugo readfile shortcodes.
+
+    Handles both:
+    - MkDocs snippets syntax: --8<-- "path/to/file"
+    - Jinja2 include syntax: {% include "path/to/file" %} or {% include 'path/to/file' %}
+    - Removes surrounding ```yaml ``` code blocks if present
+
+    Args:
+        content: Markdown content
+        snippet_dest_folder: Path to snippet destination folder
+        missing_snippets: List to track missing snippet references
+        md_filename: Name of the markdown file being processed
+
+    Returns:
+        str: Content with replaced include blocks
+    """
+    def replace_include(match):
+        snippet_path = match.group(1)
+        snippet_filename = os.path.basename(snippet_path)
+
+        # Check if snippet exists in destination folder
+        full_snippet_path = os.path.join(snippet_dest_folder, snippet_filename)
+
+        if not os.path.exists(full_snippet_path):
+            missing_snippets.append({
+                'snippet': snippet_filename,
+                'referenced_in': md_filename
+            })
+
+        # Replace with Hugo readfile shortcode (with markdown processing)
+        return f'{{{{% readfile file="{snippet_filename}" %}}}}'
+
+    modified_content = content
+
+    # Pattern 1: {% include with surrounding ```yaml ``` block (single or double quotes)
+    # Matches: ```yaml\n{% include 'file' %}\n```
+    pattern_yaml_block = r'```yaml\s*\n\s*{%\s*include\s+["\']([^"\']+)["\']\s*%}\s*\n\s*```'
+    modified_content = re.sub(pattern_yaml_block, replace_include, modified_content)
+
+    # Pattern 2: {% include without yaml block (single or double quotes)
+    pattern_include = r'{%\s*include\s+["\']([^"\']+)["\']\s*%}'
+    modified_content = re.sub(pattern_include, replace_include, modified_content)
+
+    # Pattern 3: MkDocs snippets syntax: --8<-- "path/to/file"
+    pattern_mkdocs = r'--8<--\s+"([^"]+)"'
+    modified_content = re.sub(pattern_mkdocs, replace_include, modified_content)
+
+    return modified_content
+
+
+def convert_file(src_path, dst_path, metadata, assets_folder, assets_tracking, snippet_dest_folder, missing_snippets):
     """Read source, prepend front matter, rewrite assets, write to destination."""
     # Read source file
     with open(src_path, 'r', encoding='utf-8') as f:
@@ -414,6 +508,9 @@ def convert_file(src_path, dst_path, metadata, assets_folder, assets_tracking):
     md_filename = os.path.basename(dst_path)
     content = rewrite_asset_paths(content, assets_folder, assets_tracking, md_filename)
 
+    # Replace YAML include blocks with readfile shortcode
+    content = replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_filename)
+
     # Combine and write
     output = front_matter + content
 
@@ -427,6 +524,7 @@ def main():
     parser.add_argument('--source', required=True, help='Path to directory containing markdown files')
     parser.add_argument('--dest', required=True, help='Destination directory for converted files')
     parser.add_argument('--assets-folder', required=True, help='Path to assets folder (e.g., ./static/)')
+    parser.add_argument('--snippet-destination-folder', required=True, help='Destination folder for code snippets')
 
     args = parser.parse_args()
 
@@ -446,7 +544,15 @@ def main():
     # Create destination directory if it doesn't exist
     os.makedirs(args.dest, exist_ok=True)
 
-    print(f"Parsing {args.config}...")
+    # Copy snippets folder if it exists
+    print("Checking for snippets folder...")
+    snippets_found = copy_snippets_folder(args.source, args.snippet_destination_folder)
+    if snippets_found:
+        print(f"  Copied snippets folder to {args.snippet_destination_folder}")
+    else:
+        print("  No snippets folder found in source directory")
+
+    print(f"\nParsing {args.config}...")
     file_metadata, section_metadata = parse_mkdocs_nav(args.config, args.source)
 
     print(f"Found {len(file_metadata)} files in navigation")
@@ -492,6 +598,9 @@ def main():
     # Asset tracking
     assets_tracking = defaultdict(set)
 
+    # Missing snippets tracking
+    missing_snippets = []
+
     # Convert files
     print("\nConverting markdown files...")
     converted_count = 0
@@ -511,7 +620,7 @@ def main():
             os.makedirs(dst_dir, exist_ok=True)
 
         try:
-            convert_file(src_path, dst_path, metadata, args.assets_folder, assets_tracking)
+            convert_file(src_path, dst_path, metadata, args.assets_folder, assets_tracking, args.snippet_destination_folder, missing_snippets)
             converted_count += 1
 
             # Track whether this was matched or unmatched
@@ -548,6 +657,13 @@ def main():
             # Get the weight assigned to this file
             weight = file_metadata[unmatched]['weight']
             print(f"  {unmatched} (weight: {weight})")
+
+    if missing_snippets:
+        print("\n" + "-"*70)
+        print("MISSING SNIPPETS")
+        print("-"*70)
+        for missing in missing_snippets:
+            print(f"  Snippet '{missing['snippet']}' referenced in '{missing['referenced_in']}' not found in {args.snippet_destination_folder}")
 
     print("\nConversion complete!")
 
