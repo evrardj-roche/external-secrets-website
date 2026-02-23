@@ -206,7 +206,7 @@ spec:
 The biggest change was that basically all function parameter types were changed from accepting/returning `[]byte` to `string`. This is relevant for you because now you don't need to specify `toString` all the time at the end of a template pipeline.
 
 ```yaml
-{% raw %}
+
 apiVersion: external-secrets.io/v1alpha1
 kind: ExternalSecret
 # ...
@@ -217,7 +217,7 @@ spec:
       data:
         # this used to be {{ .foobar | toString }}
         egg: "new: {{ .foobar }}"
-{% endraw %}
+
 ```
 
 ##### Functions removed/replaced

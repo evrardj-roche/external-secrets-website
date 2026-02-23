@@ -64,14 +64,14 @@ The `target` field accepts dot-notation paths like `spec.database` or `spec.logg
     ```
     templated as a literal:
     ```yaml
-    {% raw %}
+    
     template:
       engineVersion: v2
       templateFrom:
         - literal: |
             api_url: {{ .url }}
           target: spec.slack
-    {% endraw %}
+    
     ```
     will not work. A property like `property: url` MUST be defined.
 

@@ -1,4 +1,4 @@
-{% raw %}
+
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -16,4 +16,3 @@ spec:
   dataFrom:
   - extract:
       key: argocd/applications/my-app
-{% endraw %}

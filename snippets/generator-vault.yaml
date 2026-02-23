@@ -1,4 +1,4 @@
-{% raw %}
+
 
 apiVersion: generators.external-secrets.io/v1alpha1
 kind: VaultDynamicSecret
@@ -19,4 +19,4 @@ spec:
         role: "external-secrets-operator"
         serviceAccountRef:
           name: "default"
-{% endraw %}
+

@@ -13,7 +13,7 @@ External Secrets Operator can integrate with simple web apis by specifying the e
 First, create a SecretStore with a webhook backend.  We'll use a static user/password `test`:
 
 ```yaml
-{% raw %}
+
 apiVersion: external-secrets.io/v1
 kind: SecretStore
 metadata:
@@ -31,7 +31,7 @@ spec:
       - name: auth
         secretRef:
           name: webhook-credentials
-{%- endraw %}
+
 ---
 apiVersion: v1
 kind: Secret
@@ -79,7 +79,7 @@ data:
 To push a secret, create the following store:
 
 ```yaml
-{% raw %}
+
 apiVersion: external-secrets.io/v1
 kind: SecretStore
 metadata:
@@ -96,7 +96,7 @@ spec:
       - name: auth
         secretRef:
           name: webhook-credentials
-{%- endraw %}
+
 ```
 
 Then create a push secret:
@@ -123,14 +123,14 @@ spec:
 ```
 If `secretKey` is not provided, the whole secret is provided JSON encoded.
 
-The secret will be added to the `remoteRef` object so that it is retrievable in the templating engine. The secret will be sent in the body when the body field of the provider is empty. In the rare case that the body should be empty, the provider can be configured to use `{% raw %}'{{ "" }}'{% endraw %}` for the body value.
+The secret will be added to the `remoteRef` object so that it is retrievable in the templating engine. The secret will be sent in the body when the body field of the provider is empty. In the rare case that the body should be empty, the provider can be configured to use `'{{ "" }}'` for the body value.
 
 #### Authentication
 
 Webhook also supports using NTLM for authorization:
 
 ```yaml
-{% raw %}
+
 apiVersion: external-secrets.io/v1
 kind: SecretStore
 metadata:
@@ -151,7 +151,7 @@ spec:
               name: webhook-credentials
               key: password
               namespace: externalsecrets
-{%- endraw %}
+
 ---
 apiVersion: v1
 kind: Secret
