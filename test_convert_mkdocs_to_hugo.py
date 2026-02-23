@@ -158,6 +158,21 @@ class TestReplaceYamlIncludes(unittest.TestCase):
         # Ensure yaml block is removed
         self.assertNotIn('```yaml', result)
 
+    def test_jinja_include_with_space_in_yaml_block(self):
+        # From aws-parameter-store.md - space between ``` and yaml
+        content = '''``` yaml
+{% include 'test.yaml' %}
+```'''
+        missing_snippets = []
+        result = replace_yaml_includes(content, self.snippet_folder, missing_snippets, 'test.md')
+
+        expected = '{{< readfile file=/snippets/test.yaml code="true" lang="yaml" >}}'
+        self.assertEqual(result, expected)
+        self.assertEqual(len(missing_snippets), 0)
+        # Ensure yaml block is removed (both formats)
+        self.assertNotIn('```yaml', result)
+        self.assertNotIn('``` yaml', result)
+
     def test_jinja_include_without_yaml_block(self):
         content = '{% include "test.yaml" %}'
         missing_snippets = []

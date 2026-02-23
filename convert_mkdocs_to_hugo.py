@@ -487,9 +487,10 @@ def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_fil
 
     modified_content = content
 
-    # Pattern 1: {% include with surrounding ```yaml ``` block (single or double quotes)
-    # Matches: ```yaml\n{% include 'file' %}\n``` or with trailing chars like :
-    pattern_yaml_block = r'```yaml\s*\n\s*{%\s*include\s+["\']([^"\']+)["\']\s*%}[^\n]*\n\s*```'
+    # Pattern 1: {% include with surrounding ```yaml ``` or ``` yaml ``` block (single or double quotes)
+    # Matches: ```yaml\n{% include 'file' %}\n``` or ``` yaml\n{% include 'file' %}\n```
+    # Also handles trailing chars like : after the %}
+    pattern_yaml_block = r'```\s*yaml\s*\n\s*{%\s*include\s+["\']([^"\']+)["\']\s*%}[^\n]*\n\s*```'
     modified_content = re.sub(pattern_yaml_block, replace_include, modified_content)
 
     # Pattern 2: {% include without yaml block (single or double quotes)
