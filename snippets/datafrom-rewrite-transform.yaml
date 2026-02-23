@@ -1,4 +1,4 @@
-{% raw %}
+
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -14,4 +14,4 @@ spec:
       rewrite:
       - transform:
           template: 'ENV_{{ .value | upper | replace "-" "_" }}'
-{% endraw %}
+

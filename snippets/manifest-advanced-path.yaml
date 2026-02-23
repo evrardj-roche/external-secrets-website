@@ -1,4 +1,4 @@
-{% raw %}
+
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -40,4 +40,4 @@ spec:
   - secretKey: dbPassword
     remoteRef:
       key: database/password
-{% endraw %}
+

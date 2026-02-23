@@ -1,4 +1,4 @@
-{% raw %}
+
 apiVersion: generators.external-secrets.io/v1alpha1
 kind: ACRAccessToken
 metadata:
@@ -35,4 +35,4 @@ spec:
         password: "{{ .password }}"
         enableOCI: "true"
         type: "helm"
-{% endraw %}
+

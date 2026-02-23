@@ -1,4 +1,4 @@
-{% raw %}
+
 apiVersion: generators.external-secrets.io/v1alpha1
 kind: Webhook
 metadata:
@@ -25,4 +25,4 @@ data:
   username: dGVzdA== # "test"
   password: dGVzdA== # "test"
   param: dGVzdA== # "test"
-{% endraw %}
+

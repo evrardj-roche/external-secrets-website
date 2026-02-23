@@ -1,4 +1,4 @@
-{% raw %}
+
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -20,4 +20,3 @@ spec:
   - secretKey: api-endpoint
     remoteRef:
       key: config/api/endpoint
-{% endraw %}
