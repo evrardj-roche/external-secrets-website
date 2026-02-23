@@ -25,6 +25,7 @@ REQUIREMENTS:
    - Strip existing YAML/TOML front matter (including hide_toc metadata)
    - Remove <br> and <br /> tags
    - Remove markdown style attributes (e.g., {: style="width:70%;"})
+   - Remove Jinja2 raw/endraw tags (all variations: {% raw %}, {%- raw %}, etc.)
 8. Handle code snippets:
    - Copy snippets folder from source to snippet-destination-folder if it exists
    - Replace include blocks with Hugo readfile shortcode:
@@ -411,6 +412,14 @@ def clean_markdown_content(content):
 
     # Remove markdown style attributes like {: style="width:70%;"}
     content = re.sub(r'\{:\s*style="[^"]*"\s*\}', '', content)
+
+    # Remove Jinja2 raw tags (all variations)
+    # Matches: {% raw %}, {%- raw %}, {% raw -%}, {%- raw -%}
+    content = re.sub(r'\{%-?\s*raw\s*-?%\}', '', content)
+
+    # Remove Jinja2 endraw tags (all variations)
+    # Matches: {% endraw %}, {%- endraw %}, {% endraw -%}, {%- endraw -%}
+    content = re.sub(r'\{%-?\s*endraw\s*-?%\}', '', content)
 
     return content
 

@@ -81,6 +81,64 @@ Some text
         result = clean_markdown_content(content)
         self.assertEqual(result, expected)
 
+    def test_remove_raw_tags(self):
+        content = '''{% raw %}
+apiVersion: v1
+kind: Secret
+'''
+        expected = '''
+apiVersion: v1
+kind: Secret
+'''
+        result = clean_markdown_content(content)
+        self.assertEqual(result, expected)
+
+    def test_remove_endraw_tags(self):
+        content = '''apiVersion: v1
+{% endraw %}
+```'''
+        expected = '''apiVersion: v1
+
+```'''
+        result = clean_markdown_content(content)
+        self.assertEqual(result, expected)
+
+    def test_remove_raw_tags_with_hyphens(self):
+        content = '''{%- raw %}
+content here
+{%- endraw %}'''
+        expected = '''
+content here
+'''
+        result = clean_markdown_content(content)
+        self.assertEqual(result, expected)
+
+    def test_remove_inline_raw_tags(self):
+        content = '''Use {% raw %}'{{ "" }}'{% endraw %} for empty body.'''
+        expected = '''Use '{{ "" }}' for empty body.'''
+        result = clean_markdown_content(content)
+        self.assertEqual(result, expected)
+
+    def test_remove_all_raw_tag_variations(self):
+        content = '''
+{%- raw %}
+{% raw %}
+{% raw -%}
+{%- raw -%}
+Some content
+{% endraw %}
+{%- endraw %}
+{% endraw -%}
+{%- endraw -%}
+'''
+        # All tags should be removed, leaving just "Some content"
+        result = clean_markdown_content(content)
+        self.assertNotIn('raw', result)
+        self.assertNotIn('endraw', result)
+        self.assertNotIn('{%', result)
+        self.assertNotIn('%}', result)
+        self.assertIn('Some content', result)
+
 
 class TestGenerateFrontMatter(unittest.TestCase):
     """Test TOML front matter generation."""
