@@ -27,9 +27,13 @@ REQUIREMENTS:
    - Remove markdown style attributes (e.g., {: style="width:70%;"})
 8. Handle code snippets:
    - Copy snippets folder from source to snippet-destination-folder if it exists
-   - Replace include blocks with Hugo readfile shortcode ({{% readfile file="..." %}}):
+   - Replace include blocks with Hugo readfile shortcode:
+     * Format: {{< readfile file=/snippets/filename code="true" lang="yaml" >}}
      * MkDocs snippets: --8<-- "file"
      * Jinja2 includes: {% include "file" %}
+   - IMPORTANT: snippet-destination-folder should be <hugo-project-root>/snippets
+     (NOT <hugo-project-root>/content/snippets) because Hugo's readfile shortcode
+     resolves /snippets/ paths relative to the project root
    - Validate that referenced snippets exist in destination folder
    - Report missing snippet references at end of run
 9. Guard against failures:
@@ -48,7 +52,13 @@ python3 convert_mkdocs_to_hugo.py \\
   --source path/to/markdown/files/ \\
   --dest path/to/destination/ \\
   --assets-folder path/to/static/ \\
-  --snippet-destination-folder path/to/snippets/
+  --snippet-destination-folder path/to/hugo-project/snippets/
+
+NOTE: The snippet-destination-folder should point to the Hugo project root's
+      snippets folder (e.g., /path/to/hugo-project/snippets), NOT the content
+      folder (e.g., NOT /path/to/hugo-project/content/snippets). This is
+      because Hugo's readfile shortcode resolves /snippets/ paths relative to
+      the project root.
 """
 
 import argparse
@@ -468,8 +478,9 @@ def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_fil
                 'referenced_in': md_filename
             })
 
-        # Replace with Hugo readfile shortcode (with markdown processing)
-        return f'{{{{% readfile file="{snippet_filename}" %}}}}'
+        # Replace with Hugo readfile shortcode
+        # Path /snippets/ is relative to Hugo project root
+        return f'{{{{< readfile file=/snippets/{snippet_filename} code="true" lang="yaml" >}}}}'
 
     modified_content = content
 
