@@ -1,0 +1,24 @@
+{{/* Inject latest version config for context-aware search filtering.
+     Sources of truth: data/eso_versions.toml and data/reloader_versions.toml.
+     search.js reads window.__searchConfig at runtime. */}}
+{{- $latestEso := "" -}}
+{{- $latestReloader := "" -}}
+
+{{- with site.Data.eso_versions -}}
+  {{- range .versions -}}
+    {{- if .latest -}}{{- $latestEso = .tag -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- with site.Data.reloader_versions -}}
+  {{- range .versions -}}
+    {{- if .latest -}}{{- $latestReloader = .tag -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+
+<script>
+  window.__searchConfig = {
+    latestEsoVersion: "{{ $latestEso }}",
+    latestReloaderVersion: "{{ $latestReloader }}"
+  };
+</script>

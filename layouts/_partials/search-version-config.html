@@ -1,0 +1,28 @@
+{{- /* Extract latest versions from data files */ -}}
+{{- $latestESO := "" -}}
+{{- $latestReloader := "" -}}
+
+{{- with site.Data.eso_versions.versions -}}
+  {{- range . -}}
+    {{- if .latest -}}
+      {{- $latestESO = .tag -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- with site.Data.reloader_versions.versions -}}
+  {{- range . -}}
+    {{- if .latest -}}
+      {{- $latestReloader = .tag -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+<script>
+(function() {
+  window.SEARCH_LATEST_VERSIONS = {
+    eso: {{ $latestESO | jsonify }},
+    reloader: {{ $latestReloader | jsonify }}
+  };
+})();
+</script>
