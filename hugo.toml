@@ -52,7 +52,7 @@ style = "tango"
 noClasses = false
 
 [outputs]
-home = [ "HTML", "print", "RSS", "redirects" ]
+home = [ "HTML", "print", "RSS", "JSON", "redirects" ]
 section = [ "HTML", "print", "RSS" ]
 
 [params]
