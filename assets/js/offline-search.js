@@ -173,6 +173,10 @@
       idx = lunr(function () {
         this.ref('ref');
 
+        // Remove stemmer for exact word matching (prevents "Release" from matching "HelmRelease")
+        this.pipeline.remove(lunr.stemmer);
+        this.searchPipeline.remove(lunr.stemmer);
+
         // If you added more searchable fields to the search index, list them here.
         // Here you can specify searchable fields to the search index - e.g. individual toxonomies for you project
         // With "boost" you can add weighting for specific (default weighting without boost: 1)
@@ -230,15 +234,18 @@
             const queryString = token.toString();
             q.term(queryString, {
               boost: 100,
+              presence: lunr.Query.presence.REQUIRED  // Require ALL terms (AND logic)
             });
             q.term(queryString, {
               wildcard:
                 lunr.Query.wildcard.LEADING | lunr.Query.wildcard.TRAILING,
               boost: 10,
+              presence: lunr.Query.presence.REQUIRED  // Require ALL terms with wildcards
             });
             q.term(queryString, {
               // set to zero, otherwise any search will basically match some page (e.g. `asd` matching `1password` pages)
               editDistance: 0,
+              presence: lunr.Query.presence.OPTIONAL  // Optional fuzzy match
             });
           });
         })
