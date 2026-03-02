@@ -1,16 +1,89 @@
 package main
 
-// convert_mkdocs_to_hugo.go
-//
-// convert an MkDocs site into Hugo content files with TOML front matter.
-//
-// Usage (after `go mod tidy`):
-//   go run ./convert_mkdocs_to_hugo.go \
-//     --config path/to/mkdocs.yml \
-//     --source path/to/markdown/files/ \
-//     --dest path/to/destination/ \
-//     --assets-folder path/to/static/ \
-//     --snippet-destination-folder path/to/hugo-project/snippets/
+import (
+	"flag"
+	"fmt"
+	"io"
+	"io/fs"
+	"io/ioutil"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Converts an MkDocs site into Hugo content files with TOML front matter.
+
+/*
+Usage (after `go mod tidy`):
+  go run ./scripts/converter \
+    --mkdocsfile path/to/mkdocs.yml \
+    --src path/to/markdown/files/ \
+    --dst path/to/destination/ \
+    --src-assets-folder path/to/images \
+    --src-assets-folder path/to/assets \
+    --dst-assets-folder path/to/static/ \
+    --dst-snippets-folder path/to/snippets/
+*/
+
+/*
+REQUIREMENTS:
+-------------
+1. Parse mkdocs.yml navigation structure to extract file hierarchy (nav)
+2. Construct a directory structure from mkdocs hierarchy in the destination (dst) folder. Do not flatten hierarchy.
+For each of those directories, generate each _index.md files with a TOML front matter (+++...+++) including:
+- title: From nav display name (this is taken from Section name from mkdocs.yml)
+- linkTitle: Same as title
+- weight: Position in nav (increments by 10, first sections have lower weight)
+3. Extract static assets:
+- Find assets in the multiple --src-assets-folder
+- Copy them in dst-assets-folder
+4. Extract and cleanup static snippets:
+- Find all snippets files in the "snippets" subfolder of the src folder.
+- If they contain includes, clean them before pasting them in dst-snippets-folder.
+	* Replace include blocks with Hugo readfile shortcode:
+		* Format: {{< readfile file=/snippets/filename code="true" lang="yaml" >}}
+		* MkDocs snippets in source: --8<-- "file"
+		* Jinja2 includes in source : {% include "file" %}
+        * IMPORTANT: Notice the URL in those files: we are using /snippets/filename, which will map to <hugo-project-root>/snippets (NOT <hugo-project-root>/content/snippets) because Hugo's readfile shortcode resolves /snippets/ paths relative to the project root
+	* Validate that the file in the readfile "include" exists in snippets folder. Report missing snippet references at end of run if the file does not exist.
+
+5a. Extract and cleanup markdown source files:
+- Find if they are referenced in mkdocs.yml nav: use their nav position for weight
+- For all files not referenced in mkdocs.yml nav: assign higher weights (=after matched files)
+
+5b. Each of those files should be cleaned for includes before being pasted in their destination folder (based on hierarchy):
+- Strip existing YAML/TOML front matter (including hide_toc metadata)
+- Remove <br> and <br /> tags
+- Remove markdown style attributes (e.g., {: style="width:70%;"})
+- Remove Jinja2 raw/endraw tags (all variations: {% raw %}, {%- raw %}, etc.)
+- Rewrite all asset paths:
+	* Rewrite relative paths (../pictures/...) to absolute (/img/...)
+	* Handle URL-encoded filenames (e.g., %20 for spaces):
+		* Decode to find actual file
+		* Keep encoding in output path
+	* For urls pointing to https://external-secrets.io/, figure out if the full link contains a link to an asset/snippet or other content. For assets, replace with the absolute asset path. If it's a snippet, replace with the /snippets/ path. If uncertain, leave the full link as is, and report it at the end.
+- Rewrite/Cleanup any reference to an include/snippet (cleanup like in step 4).
+
+5c. Each of those files should have MkDocs admonitions converted to Hugo/Docsy GFM alerts:
+- Transform !!! syntax to blockquote-based alerts (> [!TYPE])
+- Type mapping: note→NOTE, warning→WARNING, danger→DANGER, tip→TIP, important→WARNING, info→NOTE
+- Preserve titles and multi-line content
+- Ignore modifiers like "inline end"
+- Maintain blank line between alert header and content
+
+6. Guard against failures:
+- Handle missing assets gracefully (warn but continue)
+- Catch errors in asset rewriting
+7. Write an output summary report:
+- Total files processed (split by matched/unmatched)
+- Markdown migration reporter: For all migrated files (TAB SEPARATED): source file (assets, source, snippet files), whether it was found in mkdocs.nav (true or false), file destination path , file destination weight (if markdown file, empty otherwise)
+- List of missing snippet references
+*/
 
 import (
 	_ "embed"
