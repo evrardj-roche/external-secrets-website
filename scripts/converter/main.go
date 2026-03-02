@@ -1,21 +1,5 @@
 package main
 
-import (
-	"flag"
-	"fmt"
-	"io"
-	"io/fs"
-	"io/ioutil"
-	"net/url"
-	"os"
-	"path/filepath"
-	"regexp"
-	"sort"
-	"strings"
-
-	"gopkg.in/yaml.v3"
-)
-
 // Converts an MkDocs site into Hugo content files with TOML front matter.
 
 /*
@@ -129,6 +113,8 @@ var (
 	reYamlIncludeBlock = regexp.MustCompile("(?s)```\\s*yaml\\s*\\n\\s*{\\%\\s*include\\s+[\"']([^\"']+)[\"']\\s*\\%}[^\\n]*\\n\\s*```")
 	reIncludeInline    = regexp.MustCompile(`\{\%\s*include\s+["']([^"']+)["']\s*\%\}`)
 	reMkdocsSnippet    = regexp.MustCompile(`--8<--\s+"([^"]+)"`)
+	// External-secrets.io URL pattern
+	reExternalSecretsURL = regexp.MustCompile(`https://external-secrets\.io/[^\s\)]+`)
 )
 
 // Structures
@@ -150,51 +136,91 @@ type MissingSnippet struct {
 	ReferencedIn string
 }
 
+type MigrationRecord struct {
+	SourceFile  string
+	InMkdocsNav bool
+	DestPath    string
+	Weight      string // string to handle empty for non-markdown files
+}
+
+type ExternalURLReport struct {
+	URL          string
+	MarkdownFile string
+	Action       string // "rewritten_asset", "rewritten_snippet", "kept_as_is"
+	Reason       string
+}
+
+type arrayFlags []string
+
+func (a *arrayFlags) String() string {
+	return strings.Join(*a, ", ")
+}
+
+func (a *arrayFlags) Set(value string) error {
+	*a = append(*a, value)
+	return nil
+}
+
 func main() {
 	// Flags
-	configPath := flag.String("config", "", "Path to mkdocs.yml file")
-	sourceDir := flag.String("source", "", "Path to directory containing markdown files")
-	destDir := flag.String("dest", "", "Destination directory for converted files")
-	assetsFolder := flag.String("assets-folder", "", "Path to assets folder (e.g., ./static/)")
-	snippetDest := flag.String("snippet-destination-folder", "", "Destination folder for code snippets (hugo root)/snippets")
+	var srcAssetFolders arrayFlags
+	mkdocsFile := flag.String("mkdocsfile", "", "Path to mkdocs.yml file")
+	srcDir := flag.String("src", "", "Path to directory containing markdown files")
+	dstDir := flag.String("dst", "", "Destination directory for converted files")
+	flag.Var(&srcAssetFolders, "src-assets-folder", "Path to assets folder (can be specified multiple times)")
+	dstAssetsFolder := flag.String("dst-assets-folder", "", "Destination folder for assets (e.g., ./static/)")
+	dstSnippetsFolder := flag.String("dst-snippets-folder", "", "Destination folder for code snippets (hugo root)/snippets")
 	flag.Parse()
 
 	// Validate required
-	if *configPath == "" || *sourceDir == "" || *destDir == "" || *assetsFolder == "" || *snippetDest == "" {
-		fmt.Fprintln(os.Stderr, "Error: all flags --config, --source, --dest, --assets-folder, --snippet-destination-folder are required")
+	if *mkdocsFile == "" || *srcDir == "" || *dstDir == "" || len(srcAssetFolders) == 0 || *dstAssetsFolder == "" || *dstSnippetsFolder == "" {
+		fmt.Fprintln(os.Stderr, "Error: all flags --mkdocsfile, --src, --dst, --src-assets-folder, --dst-assets-folder, --dst-snippets-folder are required")
 		os.Exit(1)
 	}
 
 	// Validate paths
-	if !exists(*configPath) {
-		fmt.Fprintf(os.Stderr, "Error: Config file not found: %s\n", *configPath)
+	if !exists(*mkdocsFile) {
+		fmt.Fprintf(os.Stderr, "Error: Config file not found: %s\n", *mkdocsFile)
 		os.Exit(1)
 	}
-	if !isDir(*sourceDir) {
-		fmt.Fprintf(os.Stderr, "Error: Source directory not found: %s\n", *sourceDir)
+	if !isDir(*srcDir) {
+		fmt.Fprintf(os.Stderr, "Error: Source directory not found: %s\n", *srcDir)
 		os.Exit(1)
 	}
-	if !isDir(*assetsFolder) {
-		fmt.Fprintf(os.Stderr, "Error: Assets folder not found: %s\n", *assetsFolder)
-		os.Exit(1)
+	for _, assetFolder := range srcAssetFolders {
+		if !isDir(assetFolder) {
+			fmt.Fprintf(os.Stderr, "Error: Assets folder not found: %s\n", assetFolder)
+			os.Exit(1)
+		}
 	}
 
 	// Ensure destination exists
-	if err := os.MkdirAll(*destDir, 0755); err != nil {
+	if err := os.MkdirAll(*dstDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating dest dir: %v\n", err)
 		os.Exit(1)
 	}
 
+	// Ensure dst assets folder exists
+	if err := os.MkdirAll(*dstAssetsFolder, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating dst assets folder: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialize tracking structures
+	migrationRecords := []MigrationRecord{}
+	externalURLsReported := []ExternalURLReport{}
+	copiedAssets := map[string]string{} // decoded asset filename -> destination path
+
 	fmt.Println("Checking for snippets folder...")
-	snippetsFound := copySnippetsFolder(*sourceDir, *snippetDest)
+	snippetsFound := copySnippetsFolder(*srcDir, *dstSnippetsFolder, &migrationRecords)
 	if snippetsFound {
-		fmt.Printf("  Copied snippets folder to %s\n", *snippetDest)
+		fmt.Printf("  Copied snippets folder to %s\n", *dstSnippetsFolder)
 	} else {
 		fmt.Println("  No snippets folder found in source directory")
 	}
 
-	fmt.Printf("\nParsing %s...\n", *configPath)
-	fileMeta, sectionMeta, err := parseMkdocsNav(*configPath, *sourceDir)
+	fmt.Printf("\nParsing %s...\n", *mkdocsFile)
+	fileMeta, sectionMeta, err := parseMkdocsNav(*mkdocsFile, *srcDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing mkdocs nav: %v\n", err)
 		os.Exit(1)
@@ -205,7 +231,7 @@ func main() {
 
 	// Scan source dir for all markdown files
 	allMd := map[string]bool{}
-	err = filepath.WalkDir(*sourceDir, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(*srcDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -213,7 +239,7 @@ func main() {
 			return nil
 		}
 		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
-			rel, err := filepath.Rel(*sourceDir, path)
+			rel, err := filepath.Rel(*srcDir, path)
 			if err != nil {
 				return err
 			}
@@ -271,7 +297,7 @@ func main() {
 	sort.Strings(sectionPaths)
 	for _, dirPath := range sectionPaths {
 		meta := sectionMeta[dirPath]
-		fullDir := filepath.Join(*destDir, filepath.FromSlash(dirPath))
+		fullDir := filepath.Join(*dstDir, filepath.FromSlash(dirPath))
 		if err := os.MkdirAll(fullDir, 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating directory %s: %v\n", fullDir, err)
 			continue
@@ -279,9 +305,6 @@ func main() {
 		createIndexFile(fullDir, meta)
 		fmt.Printf("  Created %s/_index.md (title=%q, weight=%d)\n", dirPath, meta.Title, meta.Weight)
 	}
-
-	// Asset tracking
-	assetsTracking := map[string]map[string]bool{} // decoded asset -> set of md filenames
 
 	// Missing snippets
 	missingSnippets := []MissingSnippet{}
@@ -302,8 +325,8 @@ func main() {
 
 	for _, filepathRel := range fileKeys {
 		meta := fileMeta[filepathRel]
-		srcPath := filepath.Join(*sourceDir, filepath.FromSlash(filepathRel))
-		dstPath := filepath.Join(*destDir, filepath.FromSlash(filepathRel))
+		srcPath := filepath.Join(*srcDir, filepath.FromSlash(filepathRel))
+		dstPath := filepath.Join(*dstDir, filepath.FromSlash(filepathRel))
 		// Ensure parent dir exists
 		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating parent dir for %s: %v\n", dstPath, err)
@@ -316,7 +339,7 @@ func main() {
 			errorCount++
 			continue
 		}
-		if err := convertFile(srcPath, dstPath, meta, *assetsFolder, assetsTracking, *snippetDest, &missingSnippets); err != nil {
+		if err := convertFile(srcPath, dstPath, meta, srcAssetFolders, *dstAssetsFolder, &copiedAssets, *dstSnippetsFolder, &missingSnippets, &migrationRecords, &externalURLsReported, matchedSet[filepathRel], filepathRel); err != nil {
 			fmt.Fprintf(os.Stderr, "Error converting %s: %v\n", filepathRel, err)
 			errorCount++
 			continue
@@ -339,35 +362,20 @@ func main() {
 	fmt.Printf("  - Files NOT in mkdocs.yml nav: %d\n", convertedUnmatched)
 	fmt.Printf("Errors: %d\n", errorCount)
 
-	if len(assetsTracking) > 0 {
-		fmt.Println()
-		fmt.Println(strings.Repeat("-", 70))
-		fmt.Println("ASSETS REPORT")
-		fmt.Println(strings.Repeat("-", 70))
-		assetNames := make([]string, 0, len(assetsTracking))
-		for a := range assetsTracking {
-			assetNames = append(assetNames, a)
-		}
-		sort.Strings(assetNames)
-		for _, a := range assetNames {
-			mds := make([]string, 0, len(assetsTracking[a]))
-			for m := range assetsTracking[a] {
-				mds = append(mds, m)
-			}
-			sort.Strings(mds)
-			for _, m := range mds {
-				fmt.Printf("%s\t%s\n", a, m)
-			}
-		}
-	}
+	// Sort migration records by source file
+	sort.Slice(migrationRecords, func(i, j int) bool {
+		return migrationRecords[i].SourceFile < migrationRecords[j].SourceFile
+	})
 
-	if len(unmatchedList) > 0 {
+	// Print migration report
+	if len(migrationRecords) > 0 {
 		fmt.Println()
 		fmt.Println(strings.Repeat("-", 70))
-		fmt.Println("FILES NOT IN mkdocs.yml nav (migrated with higher weights)")
+		fmt.Println("MIGRATION REPORT (Tab-separated)")
 		fmt.Println(strings.Repeat("-", 70))
-		for _, u := range unmatchedList {
-			fmt.Printf("  %s (weight: %d)\n", u, fileMeta[u].Weight)
+		fmt.Println("SourceFile\tInMkdocsNav\tDestinationPath\tWeight")
+		for _, rec := range migrationRecords {
+			fmt.Printf("%s\t%t\t%s\t%s\n", rec.SourceFile, rec.InMkdocsNav, rec.DestPath, rec.Weight)
 		}
 	}
 
@@ -377,7 +385,18 @@ func main() {
 		fmt.Println("MISSING SNIPPETS")
 		fmt.Println(strings.Repeat("-", 70))
 		for _, ms := range missingSnippets {
-			fmt.Printf("  Snippet '%s' referenced in '%s' not found in %s\n", ms.Snippet, ms.ReferencedIn, *snippetDest)
+			fmt.Printf("  Snippet '%s' referenced in '%s' not found in %s\n", ms.Snippet, ms.ReferencedIn, *dstSnippetsFolder)
+		}
+	}
+
+	if len(externalURLsReported) > 0 {
+		fmt.Println()
+		fmt.Println(strings.Repeat("-", 70))
+		fmt.Println("EXTERNAL-SECRETS.IO URLs REPORT")
+		fmt.Println(strings.Repeat("-", 70))
+		fmt.Println("URL\tMarkdownFile\tAction\tReason")
+		for _, report := range externalURLsReported {
+			fmt.Printf("%s\t%s\t%s\t%s\n", report.URL, report.MarkdownFile, report.Action, report.Reason)
 		}
 	}
 
@@ -551,49 +570,142 @@ func escapeTOMLString(s string) string {
 	return s
 }
 
-// findAssetInFolder: search recursively; matches either encoded or decoded filename.
-// returns path relative to assets folder, URL-encoded (space -> %20), prefixed with '/'
-func findAssetInFolder(assetFilename, assetsFolder string) (string, error) {
+// findAndCopyAsset: search for asset in multiple source folders, copy to destination, and track migration.
+// Returns the destination path for use in markdown (e.g., /img/diagram.png).
+func findAndCopyAsset(assetFilename string, srcAssetFolders []string, dstAssetsFolder string, copiedAssets *map[string]string, migrationRecords *[]MigrationRecord) (string, error) {
 	decoded, err := url.PathUnescape(assetFilename)
 	if err != nil {
 		decoded = assetFilename
 	}
-	var found string
-	err = filepath.WalkDir(assetsFolder, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		name := d.Name()
-		if name == assetFilename || name == decoded {
-			rel, err := filepath.Rel(assetsFolder, path)
+
+	// Check if already copied
+	if dstPath, ok := (*copiedAssets)[decoded]; ok {
+		return dstPath, nil
+	}
+
+	// Search in all source asset folders
+	var srcPath string
+	var srcFolder string
+	var relPath string
+	for _, folder := range srcAssetFolders {
+		found := false
+		err := filepath.WalkDir(folder, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			// Use forward slashes
-			rel = filepath.ToSlash(rel)
-			// Encode spaces as %20 (keep other characters untouched)
-			rel = strings.ReplaceAll(rel, " ", "%20")
-			found = "/" + rel
-			return io.EOF // short-circuit walk
+			if d.IsDir() {
+				return nil
+			}
+			name := d.Name()
+			if name == assetFilename || name == decoded {
+				srcPath = path
+				srcFolder = folder
+				rel, err := filepath.Rel(folder, path)
+				if err != nil {
+					return err
+				}
+				relPath = filepath.ToSlash(rel)
+				found = true
+				return io.EOF // short-circuit walk
+			}
+			return nil
+		})
+		if err != nil && err != io.EOF {
+			continue
 		}
-		return nil
+		if found {
+			break
+		}
+	}
+
+	if srcPath == "" {
+		return "", nil // asset not found
+	}
+
+	// Copy asset to destination
+	dstPath := filepath.Join(dstAssetsFolder, filepath.FromSlash(relPath))
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+		return "", fmt.Errorf("error creating asset dest dir: %w", err)
+	}
+
+	srcFile, err := os.Open(srcPath)
+	if err != nil {
+		return "", fmt.Errorf("error opening source asset: %w", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dstPath)
+	if err != nil {
+		return "", fmt.Errorf("error creating dest asset: %w", err)
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return "", fmt.Errorf("error copying asset: %w", err)
+	}
+
+	// Encode spaces in output path
+	outputPath := strings.ReplaceAll(relPath, " ", "%20")
+	outputPath = "/" + outputPath
+
+	// Track copied asset
+	(*copiedAssets)[decoded] = outputPath
+
+	// Add to migration records (get relative path from src folder)
+	srcRelPath, _ := filepath.Rel(srcFolder, srcPath)
+	srcFullPath := filepath.Join(filepath.Base(srcFolder), srcRelPath)
+	*migrationRecords = append(*migrationRecords, MigrationRecord{
+		SourceFile:  srcFullPath,
+		InMkdocsNav: false,
+		DestPath:    dstPath,
+		Weight:      "",
 	})
-	if err != nil && err != io.EOF {
-		// some error during walk
-		return "", err
+
+	return outputPath, nil
+}
+
+// rewriteExternalSecretsURL attempts to rewrite external-secrets.io URLs to local paths
+func rewriteExternalSecretsURL(urlStr string, srcAssetFolders []string, dstAssetsFolder string, copiedAssets *map[string]string, snippetFolder string, migrationRecords *[]MigrationRecord) (newURL string, wasRewritten bool, needsReview bool, reviewReason string) {
+	// Check if URL contains asset patterns
+	assetPatterns := []string{"/img/", "/static/", "/assets/", "/pictures/"}
+	for _, pattern := range assetPatterns {
+		if strings.Contains(urlStr, pattern) {
+			// Extract filename from URL
+			parsedURL, err := url.Parse(urlStr)
+			if err != nil {
+				return urlStr, false, true, "failed to parse URL"
+			}
+			assetFilename := filepath.Base(parsedURL.Path)
+			// Try to find and copy asset
+			newPath, err := findAndCopyAsset(assetFilename, srcAssetFolders, dstAssetsFolder, copiedAssets, migrationRecords)
+			if err != nil || newPath == "" {
+				return urlStr, false, true, fmt.Sprintf("asset '%s' not found", assetFilename)
+			}
+			return newPath, true, false, "rewritten to local asset"
+		}
 	}
-	if found == "" {
-		return "", nil
+
+	// Check if URL contains snippet pattern
+	if strings.Contains(urlStr, "/snippets/") {
+		parsedURL, err := url.Parse(urlStr)
+		if err != nil {
+			return urlStr, false, true, "failed to parse URL"
+		}
+		// Extract snippet path after /snippets/
+		path := parsedURL.Path
+		idx := strings.Index(path, "/snippets/")
+		if idx >= 0 {
+			snippetPath := path[idx:] // keeps /snippets/...
+			return snippetPath, true, false, "rewritten to local snippet"
+		}
 	}
-	return found, nil
+
+	// Other content - leave as-is but report for review
+	return urlStr, false, true, "content link - kept as-is"
 }
 
 // rewriteAssetPaths rewrites image paths and html <img src="..."> to new assets paths.
-// assetsTracking maps decoded asset filename -> set of md filenames
-func rewriteAssetPaths(content, assetsFolder string, assetsTracking map[string]map[string]bool, mdFilename string) string {
+func rewriteAssetPaths(content string, srcAssetFolders []string, dstAssetsFolder string, copiedAssets *map[string]string, migrationRecords *[]MigrationRecord, externalURLsReported *[]ExternalURLReport, snippetFolder string, mdFilename string) string {
 	// Markdown images
 	content = reMarkdownImage.ReplaceAllStringFunc(content, func(m string) string {
 		sub := reMarkdownImage.FindStringSubmatch(m)
@@ -603,7 +715,7 @@ func rewriteAssetPaths(content, assetsFolder string, assetsTracking map[string]m
 		alt := sub[1]
 		path := strings.TrimSpace(sub[2])
 
-		// If external URL, leave as is
+		// If external URL, leave as is (will be handled by external-secrets.io rewriting later)
 		if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 			return m
 		}
@@ -611,17 +723,12 @@ func rewriteAssetPaths(content, assetsFolder string, assetsTracking map[string]m
 			return m
 		}
 		assetFilename := filepath.Base(path)
-		newPath, err := findAssetInFolder(assetFilename, assetsFolder)
+		newPath, err := findAndCopyAsset(assetFilename, srcAssetFolders, dstAssetsFolder, copiedAssets, migrationRecords)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error processing asset lookup in %s: %v\n", mdFilename, err)
 			return m
 		}
 		if newPath != "" {
-			decoded, _ := url.PathUnescape(assetFilename)
-			if _, ok := assetsTracking[decoded]; !ok {
-				assetsTracking[decoded] = map[string]bool{}
-			}
-			assetsTracking[decoded][mdFilename] = true
 			return fmt.Sprintf("![%s](%s)", alt, newPath)
 		}
 		decoded, _ := url.PathUnescape(assetFilename)
@@ -643,17 +750,12 @@ func rewriteAssetPaths(content, assetsFolder string, assetsTracking map[string]m
 			return m
 		}
 		assetFilename := filepath.Base(path)
-		newPath, err := findAssetInFolder(assetFilename, assetsFolder)
+		newPath, err := findAndCopyAsset(assetFilename, srcAssetFolders, dstAssetsFolder, copiedAssets, migrationRecords)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error processing asset lookup in %s: %v\n", mdFilename, err)
 			return m
 		}
 		if newPath != "" {
-			decoded, _ := url.PathUnescape(assetFilename)
-			if _, ok := assetsTracking[decoded]; !ok {
-				assetsTracking[decoded] = map[string]bool{}
-			}
-			assetsTracking[decoded][mdFilename] = true
 			return strings.Replace(m, path, newPath, 1)
 		}
 		decoded, _ := url.PathUnescape(assetFilename)
@@ -675,22 +777,45 @@ func rewriteAssetPaths(content, assetsFolder string, assetsTracking map[string]m
 			return m
 		}
 		assetFilename := filepath.Base(path)
-		newPath, err := findAssetInFolder(assetFilename, assetsFolder)
+		newPath, err := findAndCopyAsset(assetFilename, srcAssetFolders, dstAssetsFolder, copiedAssets, migrationRecords)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error processing asset lookup in %s: %v\n", mdFilename, err)
 			return m
 		}
 		if newPath != "" {
-			decoded, _ := url.PathUnescape(assetFilename)
-			if _, ok := assetsTracking[decoded]; !ok {
-				assetsTracking[decoded] = map[string]bool{}
-			}
-			assetsTracking[decoded][mdFilename] = true
 			return strings.Replace(m, path, newPath, 1)
 		}
 		decoded, _ := url.PathUnescape(assetFilename)
 		fmt.Fprintf(os.Stderr, "Warning: Asset '%s' referenced in '%s' not found in assets folder\n", decoded, mdFilename)
 		return m
+	})
+
+	// Rewrite external-secrets.io URLs
+	content = reExternalSecretsURL.ReplaceAllStringFunc(content, func(urlStr string) string {
+		newURL, wasRewritten, needsReview, reason := rewriteExternalSecretsURL(urlStr, srcAssetFolders, dstAssetsFolder, copiedAssets, snippetFolder, migrationRecords)
+
+		// Track in report
+		action := "kept_as_is"
+		if wasRewritten {
+			if strings.HasPrefix(newURL, "/snippets/") {
+				action = "rewritten_snippet"
+			} else {
+				action = "rewritten_asset"
+			}
+		}
+
+		*externalURLsReported = append(*externalURLsReported, ExternalURLReport{
+			URL:          urlStr,
+			MarkdownFile: mdFilename,
+			Action:       action,
+			Reason:       reason,
+		})
+
+		if needsReview && !wasRewritten {
+			fmt.Fprintf(os.Stderr, "Info: external-secrets.io URL in '%s' kept as-is: %s (reason: %s)\n", mdFilename, urlStr, reason)
+		}
+
+		return newURL
 	})
 
 	return content
@@ -775,7 +900,7 @@ func convertAdmonitions(content string) string {
 }
 
 // copySnippetsFolder: copies source/snippets to snippetDestFolder, cleaning jinja tags in text files
-func copySnippetsFolder(sourceDir, snippetDestFolder string) bool {
+func copySnippetsFolder(sourceDir, snippetDestFolder string, migrationRecords *[]MigrationRecord) bool {
 	srcSnippets := filepath.Join(sourceDir, "snippets")
 	if !isDir(srcSnippets) {
 		return false
@@ -817,8 +942,20 @@ func copySnippetsFolder(sourceDir, snippetDestFolder string) bool {
 			}
 			defer out.Close()
 			_, err = io.Copy(out, in)
-			return err
+			if err != nil {
+				return err
+			}
 		}
+
+		// Track in migration records
+		srcRelPath := filepath.Join("snippets", rel)
+		dstRelPath := filepath.Join(filepath.Base(snippetDestFolder), rel)
+		*migrationRecords = append(*migrationRecords, MigrationRecord{
+			SourceFile:  srcRelPath,
+			InMkdocsNav: false,
+			DestPath:    dstRelPath,
+			Weight:      "",
+		})
 		return nil
 	})
 	if err != nil {
@@ -874,7 +1011,7 @@ func replaceYamlIncludes(content string, snippetDestFolder string, missingSnippe
 }
 
 // convertFile: read source, create front matter, rewrite assets, replace includes, write destination
-func convertFile(srcPath, dstPath string, meta FileMeta, assetsFolder string, assetsTracking map[string]map[string]bool, snippetDestFolder string, missingSnippets *[]MissingSnippet) error {
+func convertFile(srcPath, dstPath string, meta FileMeta, srcAssetFolders []string, dstAssetsFolder string, copiedAssets *map[string]string, snippetDestFolder string, missingSnippets *[]MissingSnippet, migrationRecords *[]MigrationRecord, externalURLsReported *[]ExternalURLReport, inMkdocsNav bool, srcRelPath string) error {
 	b, err := ioutil.ReadFile(srcPath)
 	if err != nil {
 		return err
@@ -891,10 +1028,23 @@ func convertFile(srcPath, dstPath string, meta FileMeta, assetsFolder string, as
 	front := generateFrontMatter(meta)
 	// Rewrite asset paths
 	mdFilename := filepath.Base(dstPath)
-	content = rewriteAssetPaths(content, assetsFolder, assetsTracking, mdFilename)
+	content = rewriteAssetPaths(content, srcAssetFolders, dstAssetsFolder, copiedAssets, migrationRecords, externalURLsReported, snippetDestFolder, mdFilename)
 	// Replace includes
 	content = replaceYamlIncludes(content, snippetDestFolder, missingSnippets, mdFilename)
 	// Combine and write
 	out := front + content
-	return ioutil.WriteFile(dstPath, []byte(out), 0644)
+	err = ioutil.WriteFile(dstPath, []byte(out), 0644)
+	if err != nil {
+		return err
+	}
+
+	// Track in migration records
+	*migrationRecords = append(*migrationRecords, MigrationRecord{
+		SourceFile:  srcRelPath,
+		InMkdocsNav: inMkdocsNav,
+		DestPath:    dstPath,
+		Weight:      fmt.Sprintf("%d", meta.Weight),
+	})
+
+	return nil
 }
