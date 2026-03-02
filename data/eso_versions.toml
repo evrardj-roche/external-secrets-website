@@ -1,8 +1,1 @@
-[[versions]]
-  version = "v1.0.0 (latest)"
-  url = "/eso-docs/v1.0.0/"
-  tag = "v1.0.0"
-  latest = true
-  release_date = "2026-02-23"
-  tested_k8s_versions = ["v1.34"]
-  end_of_life = ""
+
