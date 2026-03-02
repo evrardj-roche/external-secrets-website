@@ -10,12 +10,11 @@
     //
     // Context-aware filtering
     //
-    // if we are on a given project version, we only show
-    // pages for that project version. For the rest, we show
-    // the latest version.
-    // e.g. /eso-docs/unreleased/... -> only show pages for eso-docs/unreleased + reloader-docs/v1.0(latest)
-    // e.g. /reloader-docs/0.1/... -> show pages for reloader-docs/0.1 + eso-docs/v1.0.0 (latest)
-    // e.g. /community -> shows pages for reloader-docs/1.0(latest) + eso-docs/v1.0.0(latest)
+    // if we are on a given project version, we show pages for that project version
+    // plus latest of other projects. We also always include unreleased versions.
+    // e.g. /eso-docs/unreleased/... -> eso-docs/unreleased + reloader-docs/v1.0(latest) + reloader-docs/unreleased
+    // e.g. /reloader-docs/0.1/... -> reloader-docs/0.1 + eso-docs/v1.0.0(latest) + both unreleased versions
+    // e.g. /community -> reloader-docs/v1.0(latest) + eso-docs/v1.0.0(latest) + both unreleased versions
     var cfg = window.__searchConfig || {};
     var LATEST_ESO_VERSION = cfg.latestEsoVersion || '';
     var LATEST_RELOADER_VERSION = cfg.latestReloaderVersion || '';
@@ -81,10 +80,18 @@
           if (itemCtx.section === 'blog' || itemCtx.section === 'community' || itemCtx.section === 'main-page') {
             return true;
           }
+          // Show latest versions
           if (itemCtx.section === 'eso-docs' && itemCtx.version === LATEST_ESO_VERSION) {
             return true;
           }
           if (itemCtx.section === 'reloader-docs' && itemCtx.version === LATEST_RELOADER_VERSION) {
+            return true;
+          }
+          // Also show unreleased versions for glimpse into the future
+          if (itemCtx.section === 'eso-docs' && itemCtx.version === 'unreleased') {
+            return true;
+          }
+          if (itemCtx.section === 'reloader-docs' && itemCtx.version === 'unreleased') {
             return true;
           }
           return false;
@@ -94,10 +101,19 @@
       if (ctx.type === 'eso') {
         return function(ref) {
           var itemCtx = getItemContext(ref);
+          // Show current ESO version
           if (itemCtx.section === 'eso-docs' && itemCtx.version === ctx.version) {
             return true;
           }
+          // Show latest of other project
           if (itemCtx.section === 'reloader-docs' && itemCtx.version === LATEST_RELOADER_VERSION) {
+            return true;
+          }
+          // Also show unreleased versions for glimpse into the future
+          if (itemCtx.section === 'eso-docs' && itemCtx.version === 'unreleased') {
+            return true;
+          }
+          if (itemCtx.section === 'reloader-docs' && itemCtx.version === 'unreleased') {
             return true;
           }
           return false;
@@ -107,10 +123,19 @@
       if (ctx.type === 'reloader') {
         return function(ref) {
           var itemCtx = getItemContext(ref);
+          // Show current Reloader version
           if (itemCtx.section === 'reloader-docs' && itemCtx.version === ctx.version) {
             return true;
           }
+          // Show latest of other project
           if (itemCtx.section === 'eso-docs' && itemCtx.version === LATEST_ESO_VERSION) {
+            return true;
+          }
+          // Also show unreleased versions for glimpse into the future
+          if (itemCtx.section === 'eso-docs' && itemCtx.version === 'unreleased') {
+            return true;
+          }
+          if (itemCtx.section === 'reloader-docs' && itemCtx.version === 'unreleased') {
             return true;
           }
           return false;
