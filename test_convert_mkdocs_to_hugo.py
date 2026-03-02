@@ -140,6 +140,277 @@ Some content
         self.assertIn('Some content', result)
 
 
+class TestConvertAdmonitions(unittest.TestCase):
+    """Test conversion of MkDocs admonitions to Hugo/Docsy GFM alerts."""
+
+    def test_note_with_title(self):
+        """Test basic note admonition with title."""
+        content = '''!!! note "Important Information"
+    This is a note with a title.
+'''
+        expected = '''> [!NOTE] Important Information
+>
+> This is a note with a title.
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_warning_without_title(self):
+        """Test warning admonition without title."""
+        content = '''!!! warning
+    This is a warning without a title.
+'''
+        expected = '''> [!WARNING]
+>
+> This is a warning without a title.
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_danger_with_title(self):
+        """Test danger admonition."""
+        content = '''!!! danger "Data Exfiltration Risk"
+    If not configured properly ESO may be used to exfiltrate data.
+'''
+        expected = '''> [!DANGER] Data Exfiltration Risk
+>
+> If not configured properly ESO may be used to exfiltrate data.
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_tip_without_title(self):
+        """Test tip admonition type."""
+        content = '''!!! tip
+    Save the file as: `conjur-secret-store.yaml`
+'''
+        expected = '''> [!TIP]
+>
+> Save the file as: `conjur-secret-store.yaml`
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_important_maps_to_warning(self):
+        """Test that 'important' type maps to WARNING."""
+        content = '''!!! important
+    Unless you are using a ClusterSecretStore, credentials must reside in the same namespace.
+'''
+        expected = '''> [!WARNING]
+>
+> Unless you are using a ClusterSecretStore, credentials must reside in the same namespace.
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_info_maps_to_note(self):
+        """Test that 'info' type maps to NOTE."""
+        content = '''!!! info "Additional Details"
+    More information here.
+'''
+        expected = '''> [!NOTE] Additional Details
+>
+> More information here.
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_multiline_content(self):
+        """Test admonition with multiple lines of content."""
+        content = '''!!! warning "API Pricing & Throttling"
+    The SSM Parameter Store API is charged by throughput and
+    is available in different tiers, [see pricing](https://aws.amazon.com/systems-manager/pricing/#Parameter_Store).
+    Please estimate your costs before using ESO.
+'''
+        expected = '''> [!WARNING] API Pricing & Throttling
+>
+> The SSM Parameter Store API is charged by throughput and
+> is available in different tiers, [see pricing](https://aws.amazon.com/systems-manager/pricing/#Parameter_Store).
+> Please estimate your costs before using ESO.
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_content_with_blank_lines(self):
+        """Test admonition with blank lines in content."""
+        content = '''!!! danger "Data Exfiltration Risk"
+
+    If not configured properly ESO may be used to exfiltrate data.
+    It is advised to create tight NetworkPolicies.
+'''
+        expected = '''> [!DANGER] Data Exfiltration Risk
+>
+>
+> If not configured properly ESO may be used to exfiltrate data.
+> It is advised to create tight NetworkPolicies.
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_inline_end_modifier_ignored(self):
+        """Test that 'inline end' modifier is ignored."""
+        content = '''!!! note inline end
+    The provider returns static data.
+'''
+        expected = '''> [!NOTE]
+>
+> The provider returns static data.
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_single_quotes_title(self):
+        """Test admonition with single-quoted title."""
+        content = """!!! note 'Single Quoted Title'
+    Content here.
+"""
+        expected = """> [!NOTE] Single Quoted Title
+>
+> Content here.
+"""
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_mixed_case_types(self):
+        """Test various capitalizations of types."""
+        inputs_and_types = [
+            ('note', 'NOTE'),
+            ('Note', 'NOTE'),
+            ('NOTE', 'NOTE'),
+            ('Warning', 'WARNING'),
+            ('Danger', 'DANGER'),
+            ('Tip', 'TIP'),
+        ]
+
+        for input_type, expected_type in inputs_and_types:
+            content = f'''!!! {input_type}
+    Content.
+'''
+            result = convert_admonitions(content)
+            self.assertIn(f'[!{expected_type}]', result)
+
+    def test_multiple_admonitions_in_content(self):
+        """Test multiple admonitions in same content."""
+        content = '''# Heading
+
+!!! note
+    First note.
+
+Some text here.
+
+!!! warning "Alert"
+    Second warning.
+
+More text.
+'''
+        result = convert_admonitions(content)
+
+        self.assertNotIn('!!!', result)
+        self.assertEqual(result.count('> [!'), 2)
+        self.assertIn('> [!NOTE]', result)
+        self.assertIn('> [!WARNING] Alert', result)
+        self.assertIn('> First note.', result)
+        self.assertIn('> Second warning.', result)
+
+    def test_admonition_with_code_block(self):
+        """Test admonition containing code blocks."""
+        content = '''!!! note
+    Example code:
+
+    ```yaml
+    apiVersion: v1
+    kind: Secret
+    ```
+'''
+        expected = '''> [!NOTE]
+>
+> Example code:
+>
+> ```yaml
+> apiVersion: v1
+> kind: Secret
+> ```
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_admonition_with_list(self):
+        """Test admonition containing markdown list."""
+        content = '''!!! note "Requirements"
+    - Item one
+    - Item two
+    - Item three
+'''
+        expected = '''> [!NOTE] Requirements
+>
+> - Item one
+> - Item two
+> - Item three
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_extra_spaces_after_marker(self):
+        """Test resilience to extra spaces after !!!."""
+        content = '''!!!  note   "Title"
+    Content.
+'''
+        # Should handle extra spaces gracefully
+        result = convert_admonitions(content)
+        self.assertIn('[!NOTE] Title', result)
+
+    def test_empty_content(self):
+        """Test admonition with no content (edge case)."""
+        content = '''!!! note "Just a title"
+'''
+        result = convert_admonitions(content)
+        self.assertIn('> [!NOTE] Just a title', result)
+
+    def test_no_admonitions(self):
+        """Test content without admonitions remains unchanged."""
+        content = '''# Regular Markdown
+
+Some text here.
+
+- List item
+- Another item
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, content)
+
+    def test_unknown_type_uppercased(self):
+        """Test that unknown types are just uppercased."""
+        content = '''!!! custom "Custom Type"
+    Custom admonition type.
+'''
+        result = convert_admonitions(content)
+        self.assertIn('> [!CUSTOM] Custom Type', result)
+
+    def test_preserve_inline_markdown(self):
+        """Test that inline markdown in content is preserved."""
+        content = '''!!! note
+    This has **bold** and *italic* and `code` and [links](url).
+'''
+        expected = '''> [!NOTE]
+>
+> This has **bold** and *italic* and `code` and [links](url).
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+    def test_nested_quotes_in_title(self):
+        """Test title with nested quotes."""
+        content = '''!!! note "This has a 'nested' quote"
+    Content.
+'''
+        expected = '''> [!NOTE] This has a 'nested' quote
+>
+> Content.
+'''
+        result = convert_admonitions(content)
+        self.assertEqual(result, expected)
+
+
 class TestGenerateFrontMatter(unittest.TestCase):
     """Test TOML front matter generation."""
 

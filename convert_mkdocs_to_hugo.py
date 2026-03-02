@@ -72,6 +72,28 @@ from collections import defaultdict
 from urllib.parse import unquote
 
 
+# Type mapping for MkDocs admonitions to Hugo/Docsy GFM alerts
+ADMONITION_TYPE_MAPPING = {
+    'note': 'NOTE',
+    'warning': 'WARNING',
+    'danger': 'DANGER',
+    'tip': 'TIP',
+    'important': 'WARNING',
+    'info': 'NOTE',
+}
+
+# Compiled regex pattern for matching MkDocs admonitions
+ADMONITION_PATTERN = re.compile(
+    r'^!!! +(\w+)'                    # Type (required)
+    r'(?: +"([^"]+)")?'               # Optional title in double quotes
+    r"(?: +'([^']+)')?"               # Optional title in single quotes
+    r'(?:[^\n]*)?'                    # Ignore modifiers (inline end, etc.)
+    r'\n'                             # Newline after header
+    r'((?:(?:^    .*$|^\s*$)\n?)*)',  # Indented content (4 spaces) or blank lines
+    re.MULTILINE
+)
+
+
 def parse_mkdocs_nav(yaml_path, source_dir):
     """Parse nav section from mkdocs.yml, return file->metadata mapping.
 
@@ -424,6 +446,75 @@ def clean_markdown_content(content):
     return content
 
 
+def convert_admonitions(content):
+    """Convert MkDocs admonitions to Hugo/Docsy GFM alerts.
+
+    Transforms MkDocs admonition syntax like:
+        !!! note "Title"
+            Content here
+
+    Into Hugo/Docsy GFM alert syntax:
+        > [!NOTE] Title
+        >
+        > Content here
+
+    Args:
+        content: Markdown content string
+
+    Returns:
+        str: Content with admonitions converted to GFM alerts
+    """
+
+    def replace_admonition(match):
+        """Replace a single admonition match with GFM alert syntax."""
+        # Extract matched groups
+        adm_type = match.group(1)      # Type (note, warning, etc.)
+        title_double = match.group(2)  # Double-quoted title
+        title_single = match.group(3)  # Single-quoted title
+        body = match.group(4)           # Indented content
+
+        # Determine actual title (prefer double quotes, fallback to single)
+        title = title_double or title_single or ''
+
+        # Map type to GFM alert type (uppercase)
+        alert_type = ADMONITION_TYPE_MAPPING.get(adm_type.lower(), adm_type.upper())
+
+        # Build header line
+        if title:
+            header = f'> [!{alert_type}] {title}'
+        else:
+            header = f'> [!{alert_type}]'
+
+        # Process body content
+        if body:
+            # Split into lines and remove 4-space indentation
+            lines = body.split('\n')
+            processed_lines = []
+
+            for line in lines:
+                if line.strip():  # Non-empty line
+                    # Remove 4-space indent and add blockquote prefix
+                    if line.startswith('    '):
+                        processed_lines.append('> ' + line[4:])
+                    else:
+                        # Handle lines with less than 4 spaces (normalize)
+                        processed_lines.append('> ' + line.lstrip())
+                else:  # Blank line
+                    processed_lines.append('>')
+
+            # Join with newlines, ensuring blank line after header
+            body_text = '\n'.join(processed_lines).rstrip()
+            if body_text:
+                return f'{header}\n>\n{body_text}'
+            else:
+                return header
+        else:
+            return header
+
+    # Apply replacement using the compiled pattern
+    return ADMONITION_PATTERN.sub(replace_admonition, content)
+
+
 def copy_snippets_folder(source_dir, snippet_dest_folder):
     """Copy snippets folder from source to destination.
 
@@ -549,6 +640,9 @@ def convert_file(src_path, dst_path, metadata, assets_folder, assets_tracking, s
 
     # Clean markdown content (remove <br>, style attributes, etc.)
     content = clean_markdown_content(content)
+
+    # Convert admonitions to GFM alerts
+    content = convert_admonitions(content)
 
     # Generate front matter
     front_matter = generate_front_matter(metadata)
