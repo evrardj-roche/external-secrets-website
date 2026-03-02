@@ -1,11 +1,9 @@
 +++
 title = "Operator Documentation"
 linkTitle = "Operator Docs"
+type = "redirect"
+project = "eso"
 
 [menu.main]
 weight = 10
 +++
-
-{{< version-selector "eso" >}}
-
-{{< support-matrix "eso" >}}

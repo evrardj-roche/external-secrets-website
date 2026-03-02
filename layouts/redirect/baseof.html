@@ -1,0 +1,31 @@
+{{- $redirectUrl := .Params.redirect_url -}}
+{{- $project := .Params.project -}}
+
+{{- if not $redirectUrl -}}
+  {{- if eq $project "eso" -}}
+    {{- range site.Data.eso_versions.versions -}}
+      {{- if .latest -}}{{- $redirectUrl = .url -}}{{- end -}}
+    {{- end -}}
+  {{- else if eq $project "reloader" -}}
+    {{- range site.Data.reloader_versions.versions -}}
+      {{- if .latest -}}{{- $redirectUrl = .url -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+<!DOCTYPE html>
+<html lang="{{ .Site.Language.Lang }}">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="refresh" content="0; url={{ $redirectUrl }}">
+    <link rel="canonical" href="{{ $redirectUrl }}">
+    <title>Redirecting...</title>
+    <script>
+        window.location.href = "{{ $redirectUrl }}";
+    </script>
+</head>
+<body>
+    <p>Redirecting to <a href="{{ $redirectUrl }}">{{ $redirectUrl }}</a>...</p>
+    <p>For release information and other versions, see the <a href="/releases/">Releases</a> page.</p>
+</body>
+</html>

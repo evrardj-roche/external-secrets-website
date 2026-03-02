@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -100,7 +99,6 @@ func main() {
 	// Determine paths
 	baseDir := filepath.Join("content", "en", fmt.Sprintf("%s-docs", *project))
 	dataFile := filepath.Join("data", fmt.Sprintf("%s_versions.toml", *project))
-	projectIndexFile := filepath.Join(baseDir, "_index.md")
 
 	// Check if data file exists
 	if _, err := os.Stat(dataFile); os.IsNotExist(err) {
@@ -184,11 +182,9 @@ func main() {
 	}
 	fmt.Printf("Overwritten %s\n", newVersionPath)
 
-	fmt.Printf("Update project root _index.md with new latest version link")
-	if err := updateProjectIndex(projectIndexFile, *project, *version); err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Updated %s\n", projectIndexFile)
+	// Note: No need to update project root _index.md anymore
+	// The redirect is now dynamic and reads from the data file automatically
+	fmt.Printf("Redirect will automatically point to %s via dynamic lookup from data file\n", *version)
 
 	fmt.Printf("\nRelease %s prepared successfully!\n", *version)
 	fmt.Printf("Next steps:\n")
@@ -215,28 +211,32 @@ func writeVersions(filename string, data *VersionsData) error {
 	return encoder.Encode(data)
 }
 
-func updateProjectIndex(filename string, project string, newVersion string) error {
-	content, err := os.ReadFile(filename)
-	if err != nil {
-		return err
-	}
-
-	text := string(content)
-
-	// Replace the "go to latest" link
-	// Match pattern like: [latest version](/eso-docs/v0.14/)
-	pattern := fmt.Sprintf(`\[latest version\]\(/%s-docs/v[\d.]+/\)`, project)
-	replacement := fmt.Sprintf(`[latest version](/%s-docs/%s/)`, project, newVersion)
-
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return err
-	}
-
-	text = re.ReplaceAllString(text, replacement)
-
-	return os.WriteFile(filename, []byte(text), 0644)
-}
+// updateProjectIndex is no longer needed as the redirect layout
+// now reads the latest version dynamically from the data files.
+// Keeping the function commented for reference in case manual updates are needed.
+//
+// func updateProjectIndex(filename string, project string, newVersion string) error {
+// 	content, err := os.ReadFile(filename)
+// 	if err != nil {
+// 		return err
+// 	}
+//
+// 	text := string(content)
+//
+// 	// Replace the "go to latest" link
+// 	// Match pattern like: [latest version](/eso-docs/v0.14/)
+// 	pattern := fmt.Sprintf(`\[latest version\]\(/%s-docs/v[\d.]+/\)`, project)
+// 	replacement := fmt.Sprintf(`[latest version](/%s-docs/%s/)`, project, newVersion)
+//
+// 	re, err := regexp.Compile(pattern)
+// 	if err != nil {
+// 		return err
+// 	}
+//
+// 	text = re.ReplaceAllString(text, replacement)
+//
+// 	return os.WriteFile(filename, []byte(text), 0644)
+// }
 
 func fetchGoMod(url string) ([]byte, error) {
 	// Fetch the go.mod file

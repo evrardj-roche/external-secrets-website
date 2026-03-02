@@ -16,7 +16,9 @@
   <table class="table table-striped table-hover">
     <thead>
       <tr>
-        <th>Version</th>
+        <th>Name</th>
+        <th>Documentation</th>
+        <th>Github Release</th>
         <th>Tested K8s Releases</th>
         <th>Release Date</th>
         <th>Status</th>
@@ -25,7 +27,9 @@
     <tbody>
       {{- range $versions -}}
       <tr>
-        <td><a href="{{ .url }}">{{ .version }}</a></td>
+        <td>{{ .version }}</td>
+        <td><a href="{{ .url }}">{{ .tag }}</a></td>
+        <td><a href="https://github.com/external-secrets/external-secrets/releases/tag/{{ .tag }}">{{ .tag }}</a></td>
         <td>
           {{- if .tested_k8s_versions -}}
             {{- range $i, $k8s := .tested_k8s_versions -}}
