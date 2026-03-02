@@ -37,10 +37,16 @@ REQUIREMENTS:
      resolves /snippets/ paths relative to the project root
    - Validate that referenced snippets exist in destination folder
    - Report missing snippet references at end of run
-9. Guard against failures:
+9. Convert MkDocs admonitions to Hugo/Docsy GFM alerts:
+   - Transform !!! syntax to blockquote-based alerts (> [!TYPE])
+   - Type mapping: note→NOTE, warning→WARNING, danger→DANGER, tip→TIP, important→WARNING, info→NOTE
+   - Preserve titles and multi-line content
+   - Ignore modifiers like "inline end"
+   - Maintain blank line between alert header and content
+10. Guard against failures:
    - Handle missing assets gracefully (warn but continue)
    - Catch errors in asset rewriting
-10. Output summary report:
+11. Output summary report:
    - Total files processed (split by matched/unmatched)
    - Assets report: tab-separated list (asset_filename<TAB>markdown_filename)
    - List of files NOT in mkdocs.yml nav with their assigned weights
@@ -502,10 +508,14 @@ def convert_admonitions(content):
                 else:  # Blank line
                     processed_lines.append('>')
 
+            # Remove trailing empty blockquote lines
+            while processed_lines and processed_lines[-1] == '>':
+                processed_lines.pop()
+
             # Join with newlines, ensuring blank line after header
-            body_text = '\n'.join(processed_lines).rstrip()
+            body_text = '\n'.join(processed_lines)
             if body_text:
-                return f'{header}\n>\n{body_text}'
+                return f'{header}\n>\n{body_text}\n'
             else:
                 return header
         else:

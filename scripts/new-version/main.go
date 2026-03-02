@@ -59,7 +59,7 @@ var (
 	project           = flag.String("project", "", "Project name (eso or reloader)")
 	version           = flag.String("version", "", "New version tag (e.g., v0.15)")
 	releaseDate       = flag.String("release-date", "", "Release date (YYYY-MM-DD format, defaults to today)")
-	testedK8sVersions = flag.String("tested-k8s-versions", "", "Comma separated list of tested k8s version (e.g. v1.35,v1.36) for the release")
+	testedK8sVersions = flag.String("tested-k8s-versions", "", "Comma separated list of tested k8s version (e.g. v1.35,v1.36) for the release. Auto-discovered from go.mod if not provided.")
 	projects          = map[string]ProjectDetails{
 		"eso":      {GoModLocation: "https://raw.githubusercontent.com/external-secrets/external-secrets/%s/go.mod", ProjectLongName: "External-Secrets Operator"},
 		"reloader": {GoModLocation: "https://raw.githubusercontent.com/external-secrets/reloader/%s/go.mod", ProjectLongName: "Reloader Operator"},

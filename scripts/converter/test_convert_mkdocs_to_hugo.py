@@ -12,6 +12,7 @@ from collections import defaultdict
 from convert_mkdocs_to_hugo import (
     strip_existing_front_matter,
     clean_markdown_content,
+    convert_admonitions,
     generate_front_matter,
     replace_yaml_includes,
     find_asset_in_folder,
