@@ -13,14 +13,43 @@
 {{- end -}}
 
 {{- if $project -}}
+{{- /* Build deduplicated map: key=major.minor */ -}}
+{{- $deduped := dict -}}
+{{- range $versions -}}
+  {{- $tag := .tag -}}
+  {{- $parts := split (strings.TrimPrefix "v" $tag) "." -}}
+  {{- $majorMinor := printf "v%s.%s" (index $parts 0) (index $parts 1) -}}
+
+  {{- $existing := index $deduped $majorMinor -}}
+  {{- if not $existing -}}
+    {{- /* First occurrence, add it */ -}}
+    {{- $deduped = merge $deduped (dict $majorMinor (dict "tag" $tag "latest" .latest "majorMinor" $majorMinor)) -}}
+  {{- else if .latest -}}
+    {{- /* Override ONLY if this entry has latest=true */ -}}
+    {{- $deduped = merge $deduped (dict $majorMinor (dict "tag" $tag "latest" .latest "majorMinor" $majorMinor)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Convert to sorted slice */ -}}
+{{- $dedupedSlice := slice -}}
+{{- range $majorMinor, $data := $deduped -}}
+  {{- $dedupedSlice = $dedupedSlice | append $data -}}
+{{- end -}}
+{{- $dedupedSlice = sort $dedupedSlice "tag" "desc" -}}
+
 <div class="dropdown">
   <a class="nav-link dropdown-toggle" href="#" role="button"
      data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
     {{- $currentLabel -}}
   </a>
   <ul class="dropdown-menu">
-    {{- range $versions -}}
-    <li><a class="dropdown-item" href="{{ .url }}">{{ .version }}</a></li>
+    {{- range $dedupedSlice -}}
+      {{- $url := printf "/%s-docs/%s/" $project .majorMinor -}}
+      {{- $displayLabel := .majorMinor -}}
+      {{- if .latest -}}
+        {{- $displayLabel = printf "%s (latest)" .majorMinor -}}
+      {{- end -}}
+    <li><a class="dropdown-item" href="{{ $url }}">{{ $displayLabel }}</a></li>
     {{- end -}}
   </ul>
 </div>

@@ -1,4 +1,4 @@
-module github.com/evrardj-roche/external-secrets-website/scripts/new-version
+module github.com/evrardj-roche/external-secrets-website/scripts/release
 
 go 1.26.0
 

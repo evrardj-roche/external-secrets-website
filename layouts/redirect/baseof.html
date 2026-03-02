@@ -4,11 +4,21 @@
 {{- if not $redirectUrl -}}
   {{- if eq $project "eso" -}}
     {{- range site.Data.eso_versions.versions -}}
-      {{- if .latest -}}{{- $redirectUrl = .url -}}{{- end -}}
+      {{- if .latest -}}
+        {{- $tag := .tag -}}
+        {{- $parts := split (strings.TrimPrefix "v" $tag) "." -}}
+        {{- $majorMinor := printf "v%s.%s" (index $parts 0) (index $parts 1) -}}
+        {{- $redirectUrl = printf "/%s-docs/%s/" $project $majorMinor -}}
+      {{- end -}}
     {{- end -}}
   {{- else if eq $project "reloader" -}}
     {{- range site.Data.reloader_versions.versions -}}
-      {{- if .latest -}}{{- $redirectUrl = .url -}}{{- end -}}
+      {{- if .latest -}}
+        {{- $tag := .tag -}}
+        {{- $parts := split (strings.TrimPrefix "v" $tag) "." -}}
+        {{- $majorMinor := printf "v%s.%s" (index $parts 0) (index $parts 1) -}}
+        {{- $redirectUrl = printf "/%s-docs/%s/" $project $majorMinor -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

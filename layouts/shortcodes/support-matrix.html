@@ -29,9 +29,19 @@
     </thead>
     <tbody>
       {{- range $versions -}}
+      {{- /* Compute URL from tag */ -}}
+      {{- $tag := .tag -}}
+      {{- $parts := split (strings.TrimPrefix "v" $tag) "." -}}
+      {{- $majorMinor := printf "v%s.%s" (index $parts 0) (index $parts 1) -}}
+      {{- $url := printf "/%s-docs/%s/" $project $majorMinor -}}
+      {{- /* Compute version display */ -}}
+      {{- $versionDisplay := $tag -}}
+      {{- if .latest -}}
+        {{- $versionDisplay = printf "%s (latest)" $tag -}}
+      {{- end -}}
       <tr>
-        <td>{{ .tag }}</td>
-        <td><a href="{{ .url }}">{{ .version }}</a></td>
+        <td>{{ $tag }}</td>
+        <td><a href="{{ $url }}">{{ $versionDisplay }}</a></td>
         <td><a href="{{ $releaseURL }}{{ .tag }}">{{ .tag }}</a></td>
         <td>
           {{- if .tested_k8s_versions -}}

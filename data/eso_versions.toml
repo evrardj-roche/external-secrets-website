@@ -1,1 +1,6 @@
-
+[[versions]]
+  tag = "v0.3.10"
+  latest = true
+  release_date = "2026-03-02"
+  tested_k8s_versions = ["=>"]
+  end_of_life = ""
