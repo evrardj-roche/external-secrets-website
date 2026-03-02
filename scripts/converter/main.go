@@ -10,8 +10,7 @@ Usage (after `go mod tidy`):
     --dst path/to/destination/ \
     --src-assets-folder path/to/images \
     --src-assets-folder path/to/assets \
-    --dst-assets-folder path/to/static/ \
-    --dst-snippets-folder path/to/snippets/
+    --dst-assets-folder path/to/static/
 */
 
 /*
@@ -28,12 +27,12 @@ For each of those directories, generate each _index.md files with a TOML front m
 - Copy them in dst-assets-folder
 4. Extract and cleanup static snippets:
 - Find all snippets files in the "snippets" subfolder of the src folder.
-- If they contain includes, clean them before pasting them in dst-snippets-folder.
+- If they contain includes, clean them before pasting them in dst/snippets folder (relative to destination).
 	* Replace include blocks with Hugo readfile shortcode:
-		* Format: {{< readfile file=/snippets/filename code="true" lang="yaml" >}}
+		* Format: {{< readfile file=snippets/filename code="true" lang="yaml" >}}
 		* MkDocs snippets in source: --8<-- "file"
 		* Jinja2 includes in source : {% include "file" %}
-        * IMPORTANT: Notice the URL in those files: we are using /snippets/filename, which will map to <hugo-project-root>/snippets (NOT <hugo-project-root>/content/snippets) because Hugo's readfile shortcode resolves /snippets/ paths relative to the project root
+        * IMPORTANT: Snippets are copied to <dst>/snippets/ folder and referenced with relative paths
 	* Validate that the file in the readfile "include" exists in snippets folder. Report missing snippet references at end of run if the file does not exist.
 
 5a. Extract and cleanup markdown source files:
@@ -169,12 +168,11 @@ func main() {
 	dstDir := flag.String("dst", "", "Destination directory for converted files")
 	flag.Var(&srcAssetFolders, "src-assets-folder", "Path to assets folder (can be specified multiple times)")
 	dstAssetsFolder := flag.String("dst-assets-folder", "", "Destination folder for assets (e.g., ./static/)")
-	dstSnippetsFolder := flag.String("dst-snippets-folder", "", "Destination folder for code snippets (hugo root)/snippets")
 	flag.Parse()
 
 	// Validate required
-	if *mkdocsFile == "" || *srcDir == "" || *dstDir == "" || len(srcAssetFolders) == 0 || *dstAssetsFolder == "" || *dstSnippetsFolder == "" {
-		fmt.Fprintln(os.Stderr, "Error: all flags --mkdocsfile, --src, --dst, --src-assets-folder, --dst-assets-folder, --dst-snippets-folder are required")
+	if *mkdocsFile == "" || *srcDir == "" || *dstDir == "" || len(srcAssetFolders) == 0 || *dstAssetsFolder == "" {
+		fmt.Fprintln(os.Stderr, "Error: all flags --mkdocsfile, --src, --dst, --src-assets-folder, --dst-assets-folder are required")
 		os.Exit(1)
 	}
 
@@ -212,9 +210,10 @@ func main() {
 	copiedAssets := map[string]string{} // decoded asset filename -> destination path
 
 	fmt.Println("Checking for snippets folder...")
-	snippetsFound := copySnippetsFolder(*srcDir, *dstSnippetsFolder, &migrationRecords)
+	dstSnippetsFolder := filepath.Join(*dstDir, "snippets")
+	snippetsFound := copySnippetsFolder(*srcDir, dstSnippetsFolder, &migrationRecords)
 	if snippetsFound {
-		fmt.Printf("  Copied snippets folder to %s\n", *dstSnippetsFolder)
+		fmt.Printf("  Copied snippets folder to %s\n", dstSnippetsFolder)
 	} else {
 		fmt.Println("  No snippets folder found in source directory")
 	}
@@ -339,7 +338,7 @@ func main() {
 			errorCount++
 			continue
 		}
-		if err := convertFile(srcPath, dstPath, meta, srcAssetFolders, *dstAssetsFolder, &copiedAssets, *dstSnippetsFolder, &missingSnippets, &migrationRecords, &externalURLsReported, matchedSet[filepathRel], filepathRel); err != nil {
+		if err := convertFile(srcPath, dstPath, meta, srcAssetFolders, *dstAssetsFolder, &copiedAssets, dstSnippetsFolder, &missingSnippets, &migrationRecords, &externalURLsReported, matchedSet[filepathRel], filepathRel); err != nil {
 			fmt.Fprintf(os.Stderr, "Error converting %s: %v\n", filepathRel, err)
 			errorCount++
 			continue
@@ -385,7 +384,7 @@ func main() {
 		fmt.Println("MISSING SNIPPETS")
 		fmt.Println(strings.Repeat("-", 70))
 		for _, ms := range missingSnippets {
-			fmt.Printf("  Snippet '%s' referenced in '%s' not found in %s\n", ms.Snippet, ms.ReferencedIn, *dstSnippetsFolder)
+			fmt.Printf("  Snippet '%s' referenced in '%s' not found in %s\n", ms.Snippet, ms.ReferencedIn, dstSnippetsFolder)
 		}
 	}
 
@@ -695,7 +694,7 @@ func rewriteExternalSecretsURL(urlStr string, srcAssetFolders []string, dstAsset
 		path := parsedURL.Path
 		idx := strings.Index(path, "/snippets/")
 		if idx >= 0 {
-			snippetPath := path[idx:] // keeps /snippets/...
+			snippetPath := path[idx+1:] // removes leading "/" to make it relative (snippets/...)
 			return snippetPath, true, false, "rewritten to local snippet"
 		}
 	}
@@ -973,8 +972,8 @@ func replaceYamlIncludes(content string, snippetDestFolder string, missingSnippe
 		if !exists(fullSnippetPath) {
 			*missingSnippets = append(*missingSnippets, MissingSnippet{Snippet: snippetPath, ReferencedIn: mdFilename})
 		}
-		// preserve subdirectories
-		return fmt.Sprintf("{{< readfile file=/snippets/%s code=\"true\" lang=\"yaml\" >}}", snippetPath)
+		// preserve subdirectories, use relative path
+		return fmt.Sprintf("{{< readfile file=snippets/%s code=\"true\" lang=\"yaml\" >}}", snippetPath)
 	}
 
 	// Pattern 1: yaml fenced block include
