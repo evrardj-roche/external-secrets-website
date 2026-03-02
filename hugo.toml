@@ -47,10 +47,6 @@ block = true
 [markup.goldmark.renderer]
 unsafe = true
 
-[markup.highlight]
-style = "tango"
-noClasses = false
-
 [outputs]
 home = [ "HTML", "print", "RSS", "redirects" ]
 section = [ "HTML", "print", "RSS" ]
@@ -67,7 +63,8 @@ github_branch = "main"
 #gcs_engine_id = "d72aa9b2712488cc3"
 #offlineSearch = false
 offlineSearch = true
-prism_syntax_highlighting = false
+#prism_syntax_highlighting = false
+prism_syntax_highlighting = true
 mainBranchPreviewURL = "https://main--goldydocs.netlify.app/"
 btn-lg = 'class="btn btn-lg btn-{1}" role="button"'
 FA = '<i class="fa-{1} fa-{2} text-{3} px-1"></i>'
