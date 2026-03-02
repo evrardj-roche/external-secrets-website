@@ -93,16 +93,11 @@ Trusted by
 {{% /blocks/section %}}
 
 
+{{% blocks/section color="secondary" type="row text-center" %}}
 
+### External-Secrets is a [![CNCF Sandbox](https://img.shields.io/badge/CNCF%20Landscape-5699C6)](https://landscape.cncf.io/?item=provisioning--security-compliance--external-secrets) Sandbox project
 
-{{% blocks/section color="secondary" type="row text-center h3" %}}
+<img src="/img/cncf-white.svg" alt="CNCF logo" height="100px" />
 
-**External-Secrets is a [CNCF][] [sandbox][] project**
-
-[![CNCF logo][]][cncf]
-
-[cncf]: https://cncf.io
-[cncf logo]: /img/cncf-white.svg
-[sandbox]: https://www.cncf.io/projects/
 
 {{% /blocks/section %}}
