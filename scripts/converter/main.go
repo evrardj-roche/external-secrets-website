@@ -16,56 +16,119 @@ Usage (after `go mod tidy`):
 /*
 REQUIREMENTS:
 -------------
-1. Parse mkdocs.yml navigation structure to extract file hierarchy (nav)
-2. Construct a directory structure from mkdocs hierarchy in the destination (dst) folder. Do not flatten hierarchy.
-For each of those directories, generate each _index.md files with a TOML front matter (+++...+++) including:
-- title: From nav display name (this is taken from Section name from mkdocs.yml)
-- linkTitle: Same as title
-- weight: Position in nav (increments by 10, first sections have lower weight)
-3. Extract static assets:
-- Find assets in the multiple --src-assets-folder
-- Copy them in dst-assets-folder
-4. Extract and cleanup static snippets:
-- Find all snippets files in the "snippets" subfolder of the src folder.
-- If they contain includes, clean them before pasting them in dst/snippets folder (relative to destination).
-	* Replace include blocks with Hugo readfile shortcode:
-		* Format: {{< readfile file=snippets/filename code="true" lang="yaml" >}}
-		* MkDocs snippets in source: --8<-- "file"
-		* Jinja2 includes in source : {% include "file" %}
-        * IMPORTANT: Snippets are copied to <dst>/snippets/ folder and referenced with relative paths
-	* Validate that the file in the readfile "include" exists in snippets folder. Report missing snippet references at end of run if the file does not exist.
 
-5a. Extract and cleanup markdown source files:
-- Find if they are referenced in mkdocs.yml nav: use their nav position for weight
-- For all files not referenced in mkdocs.yml nav: assign higher weights (=after matched files)
+1. The tool must parse mkdocs.yml to produce a file structure hierarchy similar to nav's content, not previously src hierarchy.
+No name means index.md
 
-5b. Each of those files should be cleaned for includes before being pasted in their destination folder (based on hierarchy):
-- Strip existing YAML/TOML front matter (including hide_toc metadata)
-- Remove <br> and <br /> tags
-- Remove markdown style attributes (e.g., {: style="width:70%;"})
-- Remove Jinja2 raw/endraw tags (all variations: {% raw %}, {%- raw %}, etc.)
-- Rewrite all asset paths:
-	* Rewrite relative paths (../pictures/...) to absolute (/img/...)
+For example:
+```
+nav:
+  - Introduction:
+      - Introduction: index.md
+      - Overview: introduction/overview.md
+      - Glossary: introduction/glossary.md
+  - API:
+      - Components: api/components.md
+      - Core Resources:
+          - ExternalSecret: api/externalsecret.md
+      - Generators:
+          - "api/generator/index.md"
+          - Azure Container Registry: api/generator/acr.md
+
+```
+
+Will result in a structure like this:
+
+dst/introduction/introduction.md
+dst/introduction/overview.md
+dst/introduction/glossary.md
+dst/api/components.md
+dst/api/core_resources/externalsecret.md
+dst/api/generators/index.md
+dst/api/generators/azure_container_registry.md
+
+2. Any markdown file found recursively in src/ NOT found in the nav's content will be migrated to the folder "other"
+dst/other/<filename>.md
+
+3. We want each of those md files to appear in the same order on the website as they used to have.
+For that, ensure that each future md files have a front-matter, in TOMl, containing: title (the name found in nav), linkTitle, and weight.
+
+The weight is indexed based on the relative location in the navigation (by increments of 10).
+
+Examples
+mkdocs.yml:
+```
+nav:
+  - Introduction:
+      - Introduction: index.md
+      - Overview: introduction/overview.md
+```
+dst/introduction/introduction.md:
+```
++++
+title = "Introduction"
+linkTitle = "Introduction"
+weight = 20
++++
+
+<rest of the content>
+```
+
+dst/introduction/overview.md:
+```
++++
+title = "Overview"
+linkTitle = "Overview"
+weight = 30
++++
+
+<rest of the content>
+```
+
+4. For the files which were NOT in the navigation, just add increments for weight based on alphabetic order.
+
+5. Migrates all the assets in a single folder: dst-assets-folder
+
+6. For snippets found in the src/snippets folder (or other subfolders named snippets), migrate them in the dst/snippets (subfolders are possible).
+   Record this change in memory, as sometimes snippets can be in subfolders of any source sub-directory
+   and will be therefore need to be mapped at the destination.
+
+5A. Each of the markdown files have moved to different location in step 1 and 2. Their includes or backlinks will now break.
+   FIX ALL THOSE DEAD LINKS: adapt based on file changes you introduced in previous steps.
+   Use the map you created in previous steps to know which file moved to where, and use that to ADAPT the content in each of the md files.
+   Careful, those links are in HTML, markdown, or can even be includes.
+   For HTML links: Convert them to markdown links and use their new location
+   For markdown links: Use their new locations
+   For yaml snippets (=snippets pointing to .yaml file): Convert to  {{< readfile file=snippets/new_file_location code="true" lang="yaml" >}}
+   For markdown snippets (=snippets pointing to .md file): REPLACE THOSE WITH MARKDOWN LINKS instead of simply replacing the snippet file location.
+   For example MkDocs snippets look like:
+    --8<-- "filename"
+   jinja snippets look like:
+   {% include "filename" %}
+
+5B. Also Rewrite all asset paths in those files to avoid DEAD LINKS!
+	* Migrate from rewrite relative paths (../pictures/...) to absolute (/img/...)
 	* Handle URL-encoded filenames (e.g., %20 for spaces):
 		* Decode to find actual file
 		* Keep encoding in output path
 	* For urls pointing to https://external-secrets.io/, figure out if the full link contains a link to an asset/snippet or other content. For assets, replace with the absolute asset path. If it's a snippet, replace with the /snippets/ path. If uncertain, leave the full link as is, and report it at the end.
-- Rewrite/Cleanup any reference to an include/snippet (cleanup like in step 4).
 
-5c. Each of those files should have MkDocs admonitions converted to Hugo/Docsy GFM alerts:
-- Transform !!! syntax to blockquote-based alerts (> [!TYPE])
-- Type mapping: note→NOTE, warning→WARNING, danger→DANGER, tip→TIP, important→WARNING, info→NOTE
-- Preserve titles and multi-line content
-- Ignore modifiers like "inline end"
-- Maintain blank line between alert header and content
 
-6. Guard against failures:
-- Handle missing assets gracefully (warn but continue)
-- Catch errors in asset rewriting
-7. Write an output summary report:
-- Total files processed (split by matched/unmatched)
-- Markdown migration reporter: For all migrated files (TAB SEPARATED): source file (assets, source, snippet files), whether it was found in mkdocs.nav (true or false), file destination path , file destination weight (if markdown file, empty otherwise)
-- List of missing snippet references
+5C. The destination content should now have 0 deadlinks, but might have content incompatible/that should not be rendered with hugo. Clean it up:
+- Strip existing YAML/TOML front matter from src (including hide_toc metadata)
+- Remove <br> and <br /> tags
+- Remove markdown style attributes (e.g., {: style="width:70%;"})
+- Remove Jinja2 raw/endraw tags (all variations: {% raw %}, {%- raw %}, etc.)
+- MkDocs admonitions must be converted to Hugo/Docsy GFM alerts:
+	- Transform !!! syntax to blockquote-based alerts (> [!TYPE])
+	- Type mapping: note→NOTE, warning→WARNING, danger→DANGER, tip→TIP, important→WARNING, info→NOTE
+	- Preserve titles and multi-line content
+	- Ignore modifiers like "inline end"
+	- Maintain blank line between alert header and content
+
+6. Produce a summary of all changes:
+	- Files moved (and locations)
+	- Content rewritten in each file
 */
 
 import (
@@ -122,12 +185,12 @@ var (
 // Structures
 
 type FileMeta struct {
-	Title       string
-	Section     string
-	Subsection  string
-	Weight      int
-	SourcePath  string // Original path from mkdocs.yml (for reading source file)
-	DestPath    string // Destination path with section hierarchy (for writing output)
+	Title      string
+	Section    string
+	Subsection string
+	Weight     int
+	SourcePath string // Original path from mkdocs.yml (for reading source file)
+	DestPath   string // Destination path with section hierarchy (for writing output)
 }
 
 type SectionMeta struct {
@@ -154,6 +217,9 @@ type ExternalURLReport struct {
 	Reason       string
 }
 
+// SnippetIndex maps snippet filename to its source path
+type SnippetIndex map[string]string
+
 type arrayFlags []string
 
 func (a *arrayFlags) String() string {
@@ -163,6 +229,39 @@ func (a *arrayFlags) String() string {
 func (a *arrayFlags) Set(value string) error {
 	*a = append(*a, value)
 	return nil
+}
+
+// buildSnippetIndex scans srcDir recursively for all files in "snippets" folders
+// Returns a map of filename → full source path
+func buildSnippetIndex(srcDir string) SnippetIndex {
+	index := make(SnippetIndex)
+
+	filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+
+		// Check if this file is inside a "snippets" directory
+		rel, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return nil
+		}
+
+		// Normalize to forward slashes for consistent matching
+		rel = filepath.ToSlash(rel)
+
+		// Check if path contains "/snippets/" or starts with "snippets/"
+		if strings.Contains(rel, "/snippets/") || strings.HasPrefix(rel, "snippets/") {
+			filename := filepath.Base(path)
+			// If duplicate filename, keep first found (or could warn)
+			if _, ok := index[filename]; !ok {
+				index[filename] = path
+			}
+		}
+		return nil
+	})
+
+	return index
 }
 
 func main() {
@@ -225,6 +324,11 @@ func main() {
 	} else {
 		fmt.Println("  No snippets folder found in source directory")
 	}
+
+	// Build snippet index for path resolution
+	fmt.Println("Building snippet index...")
+	snippetIndex := buildSnippetIndex(*srcDir)
+	fmt.Printf("  Found %d snippets in source\n", len(snippetIndex))
 
 	fmt.Printf("\nParsing %s...\n", *mkdocsFile)
 	fileMeta, sectionMeta, err := parseMkdocsNav(*mkdocsFile, *srcDir)
@@ -393,7 +497,7 @@ func main() {
 			continue
 		}
 		inMkdocsNav := matchedSet[meta.SourcePath]
-		if err := convertFile(srcPath, dstPath, meta, srcAssetFolders, *dstAssetsFolder, &copiedAssets, dstSnippetsFolder, &missingSnippets, &migrationRecords, &externalURLsReported, inMkdocsNav, meta.SourcePath, snippetToContentMap, filenameToDestMap); err != nil {
+		if err := convertFile(srcPath, dstPath, meta, srcAssetFolders, *dstAssetsFolder, &copiedAssets, dstSnippetsFolder, &missingSnippets, &migrationRecords, &externalURLsReported, inMkdocsNav, meta.SourcePath, snippetToContentMap, filenameToDestMap, snippetIndex); err != nil {
 			fmt.Fprintf(os.Stderr, "Error converting %s: %v\n", meta.SourcePath, err)
 			errorCount++
 			continue
@@ -1107,27 +1211,67 @@ func copySnippetsFolder(sourceDir, snippetDestFolder string, migrationRecords *[
 }
 
 // replaceYamlIncludes: replaces include blocks with Hugo readfile shortcodes or links for .md files,
-// records missing snippet references in missingSnippets
-func replaceYamlIncludes(content string, snippetDestFolder string, missingSnippets *[]MissingSnippet, mdFilename string, snippetToContentMap map[string]string) string {
-	replaceInclude := func(snippetPath string) string {
+// Uses snippetIndex to resolve paths by filename regardless of relative path depth
+func replaceYamlIncludes(content string, snippetDestFolder string, missingSnippets *[]MissingSnippet, mdFilename string, snippetToContentMap map[string]string, snippetIndex SnippetIndex) string {
+
+	// resolveSnippet takes a raw path like "../snippets/foo.yaml" and returns the destination snippet filename
+	resolveSnippet := func(rawPath string) (destPath string, found bool) {
+		// Extract just the filename
+		filename := filepath.Base(rawPath)
+
+		// Look up in index
+		srcPath, ok := snippetIndex[filename]
+		if !ok {
+			return "", false
+		}
+
+		// Copy snippet to destination if not already there
+		destFile := filepath.Join(snippetDestFolder, filename)
+		if _, err := os.Stat(destFile); os.IsNotExist(err) {
+			// Copy the file
+			srcData, err := ioutil.ReadFile(srcPath)
+			if err != nil {
+				return "", false
+			}
+			// Clean jinja tags from snippet content
+			cleaned := cleanMarkdownContent(string(srcData))
+			if err := ioutil.WriteFile(destFile, []byte(cleaned), 0644); err != nil {
+				return "", false
+			}
+		}
+
+		return filename, true
+	}
+
+	replaceInclude := func(rawSnippetPath string) string {
 		// Check if this is a markdown file that should be linked instead of included
-		if strings.HasSuffix(strings.ToLower(snippetPath), ".md") {
-			if contentFileName, ok := snippetToContentMap[snippetPath]; ok {
-				// Generate a link to the content file
-				// Extract title from the filename
+		if strings.HasSuffix(strings.ToLower(rawSnippetPath), ".md") {
+			snippetBasename := filepath.Base(rawSnippetPath)
+			if contentFileName, ok := snippetToContentMap[snippetBasename]; ok {
 				title := deriveTitleFromFilename(contentFileName)
-				// Generate relative link (assuming same directory level)
+				linkTarget := strings.TrimSuffix(contentFileName, ".md")
+				return fmt.Sprintf("For more information, see [%s](../%s/).", title, linkTarget)
+			}
+			// Also check with the raw path (without normalization)
+			if contentFileName, ok := snippetToContentMap[rawSnippetPath]; ok {
+				title := deriveTitleFromFilename(contentFileName)
 				linkTarget := strings.TrimSuffix(contentFileName, ".md")
 				return fmt.Sprintf("For more information, see [%s](../%s/).", title, linkTarget)
 			}
 		}
 
-		fullSnippetPath := filepath.Join(snippetDestFolder, filepath.FromSlash(snippetPath))
-		if !exists(fullSnippetPath) {
-			*missingSnippets = append(*missingSnippets, MissingSnippet{Snippet: snippetPath, ReferencedIn: mdFilename})
+		// Resolve snippet using index
+		destFilename, found := resolveSnippet(rawSnippetPath)
+		if !found {
+			*missingSnippets = append(*missingSnippets, MissingSnippet{
+				Snippet:      rawSnippetPath,
+				ReferencedIn: mdFilename,
+			})
+			// Return a comment indicating the missing snippet
+			return fmt.Sprintf("<!-- MISSING SNIPPET: %s -->", rawSnippetPath)
 		}
-		// preserve subdirectories, use relative path
-		return fmt.Sprintf("{{< readfile file=snippets/%s code=\"true\" lang=\"yaml\" >}}", snippetPath)
+
+		return fmt.Sprintf("{{< readfile file=\"snippets/%s\" code=\"true\" lang=\"yaml\" >}}", destFilename)
 	}
 
 	// Pattern 1: yaml fenced block include
@@ -1136,8 +1280,7 @@ func replaceYamlIncludes(content string, snippetDestFolder string, missingSnippe
 		if len(sub) < 2 {
 			return m
 		}
-		sn := sub[1]
-		return replaceInclude(sn)
+		return replaceInclude(sub[1])
 	})
 
 	// Pattern 2: jinja include inline
@@ -1146,8 +1289,7 @@ func replaceYamlIncludes(content string, snippetDestFolder string, missingSnippe
 		if len(sub) < 2 {
 			return m
 		}
-		sn := sub[1]
-		return replaceInclude(sn)
+		return replaceInclude(sub[1])
 	})
 
 	// Pattern 3: mkdocs snippet --8<--
@@ -1156,8 +1298,7 @@ func replaceYamlIncludes(content string, snippetDestFolder string, missingSnippe
 		if len(sub) < 2 {
 			return m
 		}
-		sn := sub[1]
-		return replaceInclude(sn)
+		return replaceInclude(sub[1])
 	})
 
 	return content
@@ -1283,7 +1424,7 @@ func rewriteMarkdownLinks(content string, currentDestPath string, filenameToDest
 }
 
 // convertFile: read source, create front matter, rewrite assets, replace includes, write destination
-func convertFile(srcPath, dstPath string, meta FileMeta, srcAssetFolders []string, dstAssetsFolder string, copiedAssets *map[string]string, snippetDestFolder string, missingSnippets *[]MissingSnippet, migrationRecords *[]MigrationRecord, externalURLsReported *[]ExternalURLReport, inMkdocsNav bool, srcRelPath string, snippetToContentMap map[string]string, filenameToDestMap map[string]string) error {
+func convertFile(srcPath, dstPath string, meta FileMeta, srcAssetFolders []string, dstAssetsFolder string, copiedAssets *map[string]string, snippetDestFolder string, missingSnippets *[]MissingSnippet, migrationRecords *[]MigrationRecord, externalURLsReported *[]ExternalURLReport, inMkdocsNav bool, srcRelPath string, snippetToContentMap map[string]string, filenameToDestMap map[string]string, snippetIndex SnippetIndex) error {
 	b, err := ioutil.ReadFile(srcPath)
 	if err != nil {
 		return err
@@ -1302,7 +1443,7 @@ func convertFile(srcPath, dstPath string, meta FileMeta, srcAssetFolders []strin
 	mdFilename := filepath.Base(dstPath)
 	content = rewriteAssetPaths(content, srcAssetFolders, dstAssetsFolder, copiedAssets, migrationRecords, externalURLsReported, snippetDestFolder, mdFilename)
 	// Replace includes
-	content = replaceYamlIncludes(content, snippetDestFolder, missingSnippets, mdFilename, snippetToContentMap)
+	content = replaceYamlIncludes(content, snippetDestFolder, missingSnippets, mdFilename, snippetToContentMap, snippetIndex)
 	// Rewrite internal markdown links to reflect new file locations
 	content = rewriteMarkdownLinks(content, meta.DestPath, filenameToDestMap)
 	// Combine and write
