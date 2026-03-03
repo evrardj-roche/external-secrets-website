@@ -402,8 +402,30 @@ def rewrite_asset_paths(content, assets_folder, assets_tracking, md_filename):
 
     return modified_content
 
+def create_root_folder_index_file(path, restored_content=""):
+    """ Create _index.md file for root directory """
 
-def create_index_file(dir_path, metadata):
+    content = f"""
++++
+title = "External-Secrets Operator Documentation (Unreleased)"
+linkTitle = "ESO Documentation (unreleased)"
+weight = 1
+sidebar_root_for = "self"
+
+[[cascade]]
+type = "docs"
+
+  [cascade.params]
+  project = "eso"
+  project_version = "unreleased"
++++
+
+{restored_content}
+"""
+    with open(path, "w", encoding='utf-8') as f:
+        f.write(content)
+
+def create_index_file(dir_path, metadata, restored_content=""):
     """Create _index.md file for a directory with title and weight."""
     index_path = os.path.join(dir_path, '_index.md')
 
@@ -414,11 +436,48 @@ def create_index_file(dir_path, metadata):
 title = "{title}"
 weight = {weight}
 +++
+{restored_content}
 """
 
     with open(index_path, 'w', encoding='utf-8') as f:
         f.write(content)
 
+def write_bundle_files(section_metadata, dest):
+    # Replace index.md with _index.md files for directories
+    print("Now creating leaf bundles files instead of branch bundle files...")
+    for dir_path, metadata in sorted(section_metadata.items()):
+        full_dir_path = os.path.join(dest, dir_path)
+        leaf_bundle_file = os.path.join(full_dir_path,"index.md")
+        file_to_delete = os.path.exists(leaf_bundle_file)
+
+        # For cases we wanted to _keep_ previous content. It's error prone as it contains markup and other stuff.
+        # If you want it, uncomment this and update create_index_file with 3rd argument.
+        # if file_to_delete := os.path.exists(leaf_bundle_file):
+        # with open(leaf_bundle_file, "r") as leaf:
+        #       optional_content = leaf.read()
+        # else:
+        #     optional_content = ""
+
+        branch_bundle_file = os.path.join(full_dir_path,"_index.md")
+        create_index_file(full_dir_path, metadata)
+
+        print(f"Created or updated {dir_path}/_index.md (title=\"{metadata['title']}\", weight={metadata['weight']})")
+
+        if file_to_delete:
+            Path.unlink(leaf_bundle_file)
+            print(f"Deleted {leaf_bundle_file}")
+
+    base_folder_leaf_bundle = os.path.join(dest, "index.md")
+    base_folder_branch_bundle = os.path.join(dest, "_index.md")
+    if root_file_to_delete := os.path.exists(base_folder_leaf_bundle):
+        with open(base_folder_leaf_bundle, "r") as leaf:
+             extra_content = leaf.read()
+    else:
+        extra_content = ""
+    create_root_folder_index_file(base_folder_branch_bundle, strip_existing_front_matter(extra_content))
+    if root_file_to_delete:
+        Path.unlink(base_folder_leaf_bundle)
+        print(f"Deleted {base_folder_leaf_bundle}")
 
 def strip_existing_front_matter(content):
     """Remove existing YAML or TOML front matter from content."""
@@ -583,7 +642,7 @@ def copy_snippets_folder(source_dir, snippet_dest_folder):
     return True
 
 
-def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_filename):
+def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_filename, depth=1):
     """Replace include blocks with Hugo readfile shortcodes.
 
     Handles both:
@@ -601,10 +660,14 @@ def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_fil
     Returns:
         str: Content with replaced include blocks
     """
+
     def replace_include(match):
         snippet_path = match.group(1)
         # Preserve the full relative path (including subdirectories)
         # e.g., 'gitops/kustomization.yaml' stays as 'gitops/kustomization.yaml'
+
+        # Except when mistakes happen on double /snippets/snippet...
+        snippet_path.replace('/snippets/', '/')
 
         # Check if snippet exists in destination folder (using full path)
         full_snippet_path = os.path.join(snippet_dest_folder, snippet_path)
@@ -615,10 +678,13 @@ def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_fil
                 'referenced_in': md_filename
             })
 
+        # Build path prefix based on depth: depth 1 -> "", depth 2 -> "../", depth 3 -> "../../"
+        path_prefix = '../' * (depth - 1)
         # Replace with Hugo readfile shortcode
-        # Path /snippets/ is relative to Hugo project root
         # Preserve subdirectory structure in the path
-        return f'{{{{< readfile file=/snippets/{snippet_path} code="true" lang="yaml" >}}}}'
+        # Path /snippets/ is relative to Hugo project root - we cannot use that.
+        # General case: Only one level down. If problem, let's fix it manually.
+        return f'{{{{< readfile file={path_prefix}snippets/{snippet_path} code="true" lang="yaml" >}}}}'
 
     modified_content = content
 
@@ -633,13 +699,13 @@ def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_fil
     modified_content = re.sub(pattern_include, replace_include, modified_content)
 
     # Pattern 3: MkDocs snippets syntax: --8<-- "path/to/file"
-    pattern_mkdocs = r'--8<--\s+"([^"]+)"'
-    modified_content = re.sub(pattern_mkdocs, replace_include, modified_content)
+    pattern_mkdocs_yaml = r'--8<--\s+"([^"]+.yaml)"'
+    modified_content = re.sub(pattern_mkdocs_yaml, replace_include, modified_content)
 
     return modified_content
 
 
-def convert_file(src_path, dst_path, metadata, assets_folder, assets_tracking, snippet_dest_folder, missing_snippets):
+def convert_file(src_path, dst_path, metadata, assets_folder, assets_tracking, snippet_dest_folder, missing_snippets, rootDir):
     """Read source, prepend front matter, rewrite assets, write to destination."""
     # Read source file
     with open(src_path, 'r', encoding='utf-8') as f:
@@ -657,12 +723,16 @@ def convert_file(src_path, dst_path, metadata, assets_folder, assets_tracking, s
     # Generate front matter
     front_matter = generate_front_matter(metadata)
 
+    pathComparedToDestDir = dst_path
+    pathComparedToDestDir = pathComparedToDestDir.replace(rootDir, "")
+    depth = len(pathComparedToDestDir.split("/")) # 1 -- sibling folder , increased with hierarchy
+
     # Rewrite asset paths
     md_filename = os.path.basename(dst_path)
     content = rewrite_asset_paths(content, assets_folder, assets_tracking, md_filename)
 
     # Replace YAML include blocks with readfile shortcode
-    content = replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_filename)
+    content = replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_filename, depth)
 
     # Combine and write
     output = front_matter + content
@@ -677,7 +747,6 @@ def main():
     parser.add_argument('--source', required=True, help='Path to directory containing markdown files')
     parser.add_argument('--dest', required=True, help='Destination directory for converted files')
     parser.add_argument('--assets-folder', required=True, help='Path to assets folder (e.g., ./static/)')
-    parser.add_argument('--snippet-destination-folder', required=True, help='Destination folder for code snippets')
 
     args = parser.parse_args()
 
@@ -697,11 +766,14 @@ def main():
     # Create destination directory if it doesn't exist
     os.makedirs(args.dest, exist_ok=True)
 
+
     # Copy snippets folder if it exists
     print("Checking for snippets folder...")
-    snippets_found = copy_snippets_folder(args.source, args.snippet_destination_folder)
+    snippet_destination_folder = os.path.join(args.dest, "snippets")
+    os.makedirs(snippet_destination_folder, exist_ok=True)
+    snippets_found = copy_snippets_folder(args.source, snippet_destination_folder)
     if snippets_found:
-        print(f"  Copied snippets folder to {args.snippet_destination_folder}")
+        print(f"  Copied snippets folder to {snippet_destination_folder}")
     else:
         print("  No snippets folder found in source directory")
 
@@ -740,13 +812,11 @@ def main():
             'weight': unmatched_weight
         }
 
-    # Create _index.md files for directories
     print("Creating directory index files...")
     for dir_path, metadata in sorted(section_metadata.items()):
         full_dir_path = os.path.join(args.dest, dir_path)
         os.makedirs(full_dir_path, exist_ok=True)
-        create_index_file(full_dir_path, metadata)
-        print(f"  Created {dir_path}/_index.md (title=\"{metadata['title']}\", weight={metadata['weight']})")
+        print(f"  Created {full_dir_path}")
 
     # Asset tracking
     assets_tracking = defaultdict(set)
@@ -773,7 +843,7 @@ def main():
             os.makedirs(dst_dir, exist_ok=True)
 
         try:
-            convert_file(src_path, dst_path, metadata, args.assets_folder, assets_tracking, args.snippet_destination_folder, missing_snippets)
+            convert_file(src_path, dst_path, metadata, args.assets_folder, assets_tracking, snippet_destination_folder, missing_snippets, args.dest)
             converted_count += 1
 
             # Track whether this was matched or unmatched
@@ -784,6 +854,8 @@ def main():
         except Exception as e:
             print(f"Error converting {filepath}: {e}", file=sys.stderr)
             error_count += 1
+
+    write_bundle_files(section_metadata, args.dest)
 
     # Print summary report
     print("\n" + "="*70)
@@ -816,7 +888,7 @@ def main():
         print("MISSING SNIPPETS")
         print("-"*70)
         for missing in missing_snippets:
-            print(f"  Snippet '{missing['snippet']}' referenced in '{missing['referenced_in']}' not found in {args.snippet_destination_folder}")
+            print(f"  Snippet '{missing['snippet']}' referenced in '{missing['referenced_in']}' not found in {snippet_destination_folder}")
 
     print("\nConversion complete!")
 
