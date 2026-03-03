@@ -101,12 +101,14 @@ ADMONITION_PATTERN = re.compile(
 
 
 def parse_mkdocs_nav(yaml_path, source_dir):
-    """Parse nav section from mkdocs.yml, return file->metadata mapping.
+    """Parse nav section from mkdocs.yml, building output hierarchy from nav structure.
+
+    The nav indentation determines the output folder hierarchy, NOT the source file paths.
 
     Returns:
         tuple: (file_metadata dict, section_metadata dict)
-            file_metadata: {file_path: {title, section, subsection, weight}}
-            section_metadata: {dir_path: {title, weight}}
+            file_metadata: {source_filepath: {title, output_path, weight, ...}}
+            section_metadata: {output_dir_path: {title, weight}}
     """
     with open(yaml_path, 'r') as f:
         content = f.read()
@@ -121,13 +123,15 @@ def parse_mkdocs_nav(yaml_path, source_dir):
 
     file_metadata = {}
     section_metadata = {}
-    current_section = None
-    current_subsection = None
-    current_section_dir = None
-    current_subsection_dir = None
-    section_weight = 0
-    subsection_weight = 0
-    item_weight = 0
+
+    # Track hierarchy path based on nav structure (not file paths)
+    # Example: ["community", "contributing"] means we're at Community > Contributing
+    hierarchy_path = []
+    hierarchy_titles = []  # Track the display titles at each level
+
+    # Weight tracking
+    weight_stack = [0]  # Stack of weights at each hierarchy level
+    global_weight = 0
 
     for line in lines:
         # Stop if we hit a new top-level key
@@ -138,182 +142,115 @@ def parse_mkdocs_nav(yaml_path, source_dir):
         if not line.strip() or line.strip().startswith('#'):
             continue
 
-        # Determine indentation level
+        # Determine indentation level (2 spaces = level 1, 4 spaces = level 2, etc.)
         indent = len(line) - len(line.lstrip())
         stripped = line.strip()
 
-        # Level 1: Main section (2 spaces)
-        if indent == 2 and stripped.startswith('- '):
-            section_weight += 10
-            item_weight = section_weight
-            subsection_weight = 0
+        if not stripped.startswith('- '):
+            continue
 
-            # Extract section name
-            match = re.match(r'-\s+(.+?):\s*$', stripped)
-            if match:
-                current_section = match.group(1)
-                current_subsection = None
-                current_section_dir = None
-                current_subsection_dir = None
-            else:
-                # Direct file reference at section level
-                # Try to match quoted title first (handles titles with special chars like colons)
-                match = re.match(r'-\s+"([^"]+)":\s+(.+\.md)', stripped)
-                if not match:
-                    # Try single-quoted title
-                    match = re.match(r"-\s+'([^']+)':\s+(.+\.md)", stripped)
-                if not match:
-                    # Try unquoted title
-                    match = re.match(r'-\s+(.+?):\s+(.+\.md)', stripped)
-                if match:
-                    title = match.group(1)
-                    filepath = match.group(2)
-                    current_section = title
-                    current_subsection = None
+        # Calculate hierarchy depth from indentation (2 spaces = depth 1, 4 = depth 2, 6 = depth 3, etc.)
+        hierarchy_depth = indent // 2
 
-                    # Track section directory
-                    dir_path = os.path.dirname(filepath)
-                    if dir_path and dir_path not in section_metadata:
-                        section_metadata[dir_path] = {
-                            'title': current_section,
-                            'weight': section_weight
-                        }
-                        current_section_dir = dir_path
+        # Adjust hierarchy_path to current depth
+        # If we're at depth 2 but hierarchy_path has 3 items, we need to pop back
+        while len(hierarchy_path) >= hierarchy_depth:
+            hierarchy_path.pop()
+            hierarchy_titles.pop()
+            if len(weight_stack) > 1:
+                weight_stack.pop()
 
-                    full_path = os.path.join(source_dir, filepath)
-                    if os.path.exists(full_path):
-                        file_metadata[filepath] = {
-                            'title': title,
-                            'section': current_section,
-                            'subsection': None,
-                            'weight': item_weight,
-                            'output_path': filepath  # Level 1 files keep their original path
-                        }
+        # Increment weight at current level
+        global_weight += 10
 
-        # Level 2: Items within section (exactly 4 spaces)
-        elif indent == 4 and stripped.startswith('- '):
-            item_weight += 10
+        # Try to parse the line: could be a section header or a file reference
+        # Section header: "- SectionName:" (ends with colon, no file)
+        # File reference: "- Title: path/to/file.md" or "- path/to/file.md" or "path/to/file.md"
 
-            # Check if it's a subsection or direct file
-            match = re.match(r'-\s+(.+?):\s*$', stripped)
-            if match:
-                # It's a subsection header
-                current_subsection = match.group(1)
-                subsection_weight = item_weight
-                current_subsection_dir = None
-            else:
-                # It's a file reference
-                # Try to match quoted title first (handles titles with special chars like colons)
-                match = re.match(r'-\s+"([^"]+)":\s+(.+\.md)', stripped)
-                if not match:
-                    # Try single-quoted title
-                    match = re.match(r"-\s+'([^']+)':\s+(.+\.md)", stripped)
-                if not match:
-                    # Try unquoted title
-                    match = re.match(r'-\s+(.+?):\s+(.+\.md)', stripped)
-                if not match:
-                    # Try quoted format
-                    match = re.match(r'-\s+"(.+\.md)"', stripped)
-                    if match:
-                        filepath = match.group(1)
-                        # Special handling for quoted index.md files
-                        if os.path.basename(filepath) == 'index.md':
-                            title = "Introduction"
-                            # Convert index.md to introduction.md in the output
-                            filepath_output = os.path.join(os.path.dirname(filepath), 'introduction.md')
-                        else:
-                            title = os.path.splitext(os.path.basename(filepath))[0].replace('-', ' ').title()
-                            filepath_output = filepath
-                    else:
-                        continue
-                else:
-                    title = match.group(1)
-                    filepath = match.group(2)
-                    filepath_output = filepath
+        # First check if it's a section header (ends with : and nothing after)
+        section_match = re.match(r'-\s+(.+?):\s*$', stripped)
+        if section_match:
+            # This is a section/subsection header
+            section_title = section_match.group(1)
+            section_slug = section_title.lower().replace(' ', '-').replace(':', '').replace('_', '-')
 
-                # Track section directory
-                dir_path = os.path.dirname(filepath)
-                if dir_path:
-                    if dir_path not in section_metadata:
-                        section_metadata[dir_path] = {
-                            'title': current_subsection if current_subsection else current_section,
-                            'weight': section_weight
-                        }
-                        current_section_dir = dir_path
+            # Add to hierarchy
+            hierarchy_path.append(section_slug)
+            hierarchy_titles.append(section_title)
+            weight_stack.append(global_weight)
 
-                full_path = os.path.join(source_dir, filepath)
-                if os.path.exists(full_path):
-                    file_metadata[filepath] = {
-                        'title': title,
-                        'section': current_section,
-                        'subsection': current_subsection,
-                        'weight': item_weight,
-                        'output_path': filepath_output  # Track the output path separately
-                    }
-
-        # Level 3: Items within subsection (6 spaces and above)
-        elif indent >= 6 and stripped.startswith('- '):
-            item_weight += 10
-
-            # Try to match quoted title first (handles titles with special chars like colons)
-            match = re.match(r'-\s+"([^"]+)":\s+(.+\.md)', stripped)
-            if not match:
-                # Try single-quoted title
-                match = re.match(r"-\s+'([^']+)':\s+(.+\.md)", stripped)
-            if not match:
-                # Try unquoted title
-                match = re.match(r'-\s+(.+?):\s+(.+\.md)', stripped)
-            if not match:
-                # Try quoted format
-                match = re.match(r'-\s+"(.+\.md)"', stripped)
-                if match:
-                    filepath = match.group(1)
-                    # Special handling for quoted index.md files
-                    if os.path.basename(filepath) == 'index.md':
-                        title = "Introduction"
-                        # Convert index.md to introduction.md in the output
-                        filepath_output = os.path.join(os.path.dirname(filepath), 'introduction.md')
-                    else:
-                        title = os.path.splitext(os.path.basename(filepath))[0].replace('-', ' ').title()
-                        filepath_output = filepath
-                else:
-                    continue
-            else:
-                title = match.group(1)
-                filepath = match.group(2)
-                filepath_output = filepath
-
-            # Track subsection directory
-            dir_path = os.path.dirname(filepath)
-            if dir_path:
-                # Check if this is a nested directory (subsection)
-                parent_dir = os.path.dirname(dir_path)
-                if parent_dir and parent_dir in section_metadata:
-                    # This is a subsection directory
-                    if dir_path not in section_metadata:
-                        section_metadata[dir_path] = {
-                            'title': current_subsection if current_subsection else title,
-                            'weight': subsection_weight
-                        }
-                elif not parent_dir or parent_dir == '':
-                    # This is a top-level subsection directory (e.g., api/generator)
-                    if dir_path not in section_metadata:
-                        section_metadata[dir_path] = {
-                            'title': current_subsection if current_subsection else title,
-                            'weight': subsection_weight
-                        }
-
-            full_path = os.path.join(source_dir, filepath)
-            if os.path.exists(full_path):
-                file_metadata[filepath] = {
-                    'title': title,
-                    'section': current_section,
-                    'subsection': current_subsection,
-                    'weight': item_weight,
-                    'output_path': filepath_output  # Track the output path separately
+            # Create section_metadata entry for this directory
+            output_dir = '/'.join(hierarchy_path)
+            if output_dir not in section_metadata:
+                section_metadata[output_dir] = {
+                    'title': section_title,
+                    'weight': global_weight
                 }
+            continue
+
+        # It's a file reference - try different formats
+        file_title = None
+        source_filepath = None
+
+        # Try: "- Title: path/to/file.md" (double quotes)
+        file_match = re.match(r'-\s+"([^"]+)":\s+(.+\.md)', stripped)
+        if file_match:
+            file_title = file_match.group(1)
+            source_filepath = file_match.group(2)
+        else:
+            # Try: '- Title: path/to/file.md' (single quotes)
+            file_match = re.match(r"-\s+'([^']+)':\s+(.+\.md)", stripped)
+            if file_match:
+                file_title = file_match.group(1)
+                source_filepath = file_match.group(2)
+            else:
+                # Try: "- Title: path/to/file.md" (no quotes)
+                file_match = re.match(r'-\s+(.+?):\s+(.+\.md)', stripped)
+                if file_match:
+                    file_title = file_match.group(1)
+                    source_filepath = file_match.group(2)
+                else:
+                    # Try: "- path/to/file.md" (quoted, no title)
+                    file_match = re.match(r'-\s+"(.+\.md)"', stripped)
+                    if file_match:
+                        source_filepath = file_match.group(1)
+                        # Derive title from filename
+                        file_title = os.path.splitext(os.path.basename(source_filepath))[0].replace('-', ' ').title()
+
+        if not source_filepath:
+            # Couldn't parse this line, skip it
+            continue
+
+        # Check if source file exists
+        full_source_path = os.path.join(source_dir, source_filepath)
+        if not os.path.exists(full_source_path):
+            print(f"Warning: Source file not found: {source_filepath}", file=sys.stderr)
+            continue
+
+        # Special case: api/generator/index.md should have title "Introduction"
+        if source_filepath == "api/generator/index.md":
+            file_title = "Introduction"
+            output_filename = "introduction.md"
+        else:
+            output_filename = os.path.basename(source_filepath)
+
+        # Build output path from hierarchy
+        if hierarchy_path:
+            output_path = '/'.join(hierarchy_path) + '/' + output_filename
+        else:
+            output_path = output_filename
+
+        # Store file metadata
+        file_metadata[source_filepath] = {
+            'title': file_title,
+            'output_path': output_path,
+            'weight': global_weight,
+            'hierarchy': list(hierarchy_path),  # Copy for reference
+            'hierarchy_titles': list(hierarchy_titles)
+        }
 
     return file_metadata, section_metadata
+
 
 
 def generate_front_matter(metadata):
@@ -751,7 +688,81 @@ def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_fil
     return modified_content
 
 
-def convert_file(src_path, dst_path, metadata, assets_folder, assets_tracking, snippet_dest_folder, missing_snippets, rootDir):
+def rewrite_internal_links(content, current_file_output_path, file_metadata):
+    """Rewrite internal markdown links since files have moved in hierarchy.
+
+    Args:
+        content: Markdown content
+        current_file_output_path: Output path of the current file being processed
+        file_metadata: Dict mapping source paths to metadata including output_path
+
+    Returns:
+        str: Content with rewritten internal links
+    """
+    # Build reverse mapping: source_path -> output_path
+    source_to_output = {}
+    for source_path, meta in file_metadata.items():
+        source_to_output[source_path] = meta['output_path']
+
+    # Also build mapping for filenames without paths (e.g., "file.md" -> list of possible outputs)
+    filename_to_outputs = {}
+    for source_path, output_path in source_to_output.items():
+        filename = os.path.basename(source_path)
+        if filename not in filename_to_outputs:
+            filename_to_outputs[filename] = []
+        filename_to_outputs[filename].append(output_path)
+
+    def replace_link(match):
+        """Replace a single markdown link."""
+        link_text = match.group(1)
+        link_target = match.group(2)
+
+        # Skip external links
+        if link_target.startswith('http://') or link_target.startswith('https://') or link_target.startswith('#'):
+            return match.group(0)
+
+        # Parse anchor if present
+        anchor = ''
+        if '#' in link_target:
+            link_target, anchor = link_target.split('#', 1)
+            anchor = '#' + anchor
+
+        # Skip if empty
+        if not link_target:
+            return match.group(0)
+
+        # Try to find the target file in our mappings
+        target_output_path = None
+
+        # Try exact match in source_to_output
+        if link_target in source_to_output:
+            target_output_path = source_to_output[link_target]
+        else:
+            # Try filename match
+            target_filename = os.path.basename(link_target)
+            if target_filename in filename_to_outputs:
+                possible_outputs = filename_to_outputs[target_filename]
+                if len(possible_outputs) == 1:
+                    target_output_path = possible_outputs[0]
+                # If multiple matches, can't determine which one - keep original
+
+        if not target_output_path:
+            # Can't find target, keep original link
+            return match.group(0)
+
+        # Calculate relative path from current file to target file
+        current_dir = os.path.dirname(current_file_output_path)
+        rel_path = os.path.relpath(target_output_path, current_dir)
+
+        # Construct new link
+        return f'[{link_text}]({rel_path}{anchor})'
+
+    # Pattern to match markdown links: [text](path)
+    link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+    return re.sub(link_pattern, replace_link, content)
+
+
+def convert_file(src_path, dst_path, metadata, assets_folder, assets_tracking, snippet_dest_folder, missing_snippets, rootDir, file_metadata):
     """Read source, prepend front matter, rewrite assets, write to destination."""
     # Read source file
     with open(src_path, 'r', encoding='utf-8') as f:
@@ -765,6 +776,10 @@ def convert_file(src_path, dst_path, metadata, assets_folder, assets_tracking, s
 
     # Convert admonitions to GFM alerts
     content = convert_admonitions(content)
+
+    # Rewrite internal links since files have moved in hierarchy
+    current_output_path = metadata['output_path']
+    content = rewrite_internal_links(content, current_output_path, file_metadata)
 
     # Generate front matter
     front_matter = generate_front_matter(metadata)
@@ -891,7 +906,7 @@ def main():
             os.makedirs(dst_dir, exist_ok=True)
 
         try:
-            convert_file(src_path, dst_path, metadata, args.assets_folder, assets_tracking, snippet_destination_folder, missing_snippets, args.dest)
+            convert_file(src_path, dst_path, metadata, args.assets_folder, assets_tracking, snippet_destination_folder, missing_snippets, args.dest, file_metadata)
             converted_count += 1
 
             # Track whether this was matched or unmatched
