@@ -157,7 +157,14 @@ def parse_mkdocs_nav(yaml_path, source_dir):
                 current_subsection_dir = None
             else:
                 # Direct file reference at section level
-                match = re.match(r'-\s+(.+?):\s+(.+\.md)', stripped)
+                # Try to match quoted title first (handles titles with special chars like colons)
+                match = re.match(r'-\s+"([^"]+)":\s+(.+\.md)', stripped)
+                if not match:
+                    # Try single-quoted title
+                    match = re.match(r"-\s+'([^']+)':\s+(.+\.md)", stripped)
+                if not match:
+                    # Try unquoted title
+                    match = re.match(r'-\s+(.+?):\s+(.+\.md)', stripped)
                 if match:
                     title = match.group(1)
                     filepath = match.group(2)
@@ -179,11 +186,12 @@ def parse_mkdocs_nav(yaml_path, source_dir):
                             'title': title,
                             'section': current_section,
                             'subsection': None,
-                            'weight': item_weight
+                            'weight': item_weight,
+                            'output_path': filepath  # Level 1 files keep their original path
                         }
 
-        # Level 2: Items within section (6-8 spaces)
-        elif indent >= 6 and indent <= 8 and stripped.startswith('- '):
+        # Level 2: Items within section (exactly 4 spaces)
+        elif indent == 4 and stripped.startswith('- '):
             item_weight += 10
 
             # Check if it's a subsection or direct file
@@ -195,18 +203,33 @@ def parse_mkdocs_nav(yaml_path, source_dir):
                 current_subsection_dir = None
             else:
                 # It's a file reference
-                match = re.match(r'-\s+(.+?):\s+(.+\.md)', stripped)
+                # Try to match quoted title first (handles titles with special chars like colons)
+                match = re.match(r'-\s+"([^"]+)":\s+(.+\.md)', stripped)
+                if not match:
+                    # Try single-quoted title
+                    match = re.match(r"-\s+'([^']+)':\s+(.+\.md)", stripped)
+                if not match:
+                    # Try unquoted title
+                    match = re.match(r'-\s+(.+?):\s+(.+\.md)', stripped)
                 if not match:
                     # Try quoted format
                     match = re.match(r'-\s+"(.+\.md)"', stripped)
                     if match:
                         filepath = match.group(1)
-                        title = os.path.splitext(os.path.basename(filepath))[0].replace('-', ' ').title()
+                        # Special handling for quoted index.md files
+                        if os.path.basename(filepath) == 'index.md':
+                            title = "Introduction"
+                            # Convert index.md to introduction.md in the output
+                            filepath_output = os.path.join(os.path.dirname(filepath), 'introduction.md')
+                        else:
+                            title = os.path.splitext(os.path.basename(filepath))[0].replace('-', ' ').title()
+                            filepath_output = filepath
                     else:
                         continue
                 else:
                     title = match.group(1)
                     filepath = match.group(2)
+                    filepath_output = filepath
 
                 # Track section directory
                 dir_path = os.path.dirname(filepath)
@@ -224,25 +247,41 @@ def parse_mkdocs_nav(yaml_path, source_dir):
                         'title': title,
                         'section': current_section,
                         'subsection': current_subsection,
-                        'weight': item_weight
+                        'weight': item_weight,
+                        'output_path': filepath_output  # Track the output path separately
                     }
 
-        # Level 3: Items within subsection (10-12 spaces)
-        elif indent >= 10 and indent <= 12 and stripped.startswith('- '):
+        # Level 3: Items within subsection (6 spaces and above)
+        elif indent >= 6 and stripped.startswith('- '):
             item_weight += 10
 
-            match = re.match(r'-\s+(.+?):\s+(.+\.md)', stripped)
+            # Try to match quoted title first (handles titles with special chars like colons)
+            match = re.match(r'-\s+"([^"]+)":\s+(.+\.md)', stripped)
+            if not match:
+                # Try single-quoted title
+                match = re.match(r"-\s+'([^']+)':\s+(.+\.md)", stripped)
+            if not match:
+                # Try unquoted title
+                match = re.match(r'-\s+(.+?):\s+(.+\.md)', stripped)
             if not match:
                 # Try quoted format
                 match = re.match(r'-\s+"(.+\.md)"', stripped)
                 if match:
                     filepath = match.group(1)
-                    title = os.path.splitext(os.path.basename(filepath))[0].replace('-', ' ').title()
+                    # Special handling for quoted index.md files
+                    if os.path.basename(filepath) == 'index.md':
+                        title = "Introduction"
+                        # Convert index.md to introduction.md in the output
+                        filepath_output = os.path.join(os.path.dirname(filepath), 'introduction.md')
+                    else:
+                        title = os.path.splitext(os.path.basename(filepath))[0].replace('-', ' ').title()
+                        filepath_output = filepath
                 else:
                     continue
             else:
                 title = match.group(1)
                 filepath = match.group(2)
+                filepath_output = filepath
 
             # Track subsection directory
             dir_path = os.path.dirname(filepath)
@@ -256,6 +295,13 @@ def parse_mkdocs_nav(yaml_path, source_dir):
                             'title': current_subsection if current_subsection else title,
                             'weight': subsection_weight
                         }
+                elif not parent_dir or parent_dir == '':
+                    # This is a top-level subsection directory (e.g., api/generator)
+                    if dir_path not in section_metadata:
+                        section_metadata[dir_path] = {
+                            'title': current_subsection if current_subsection else title,
+                            'weight': subsection_weight
+                        }
 
             full_path = os.path.join(source_dir, filepath)
             if os.path.exists(full_path):
@@ -263,7 +309,8 @@ def parse_mkdocs_nav(yaml_path, source_dir):
                     'title': title,
                     'section': current_section,
                     'subsection': current_subsection,
-                    'weight': item_weight
+                    'weight': item_weight,
+                    'output_path': filepath_output  # Track the output path separately
                 }
 
     return file_metadata, section_metadata
@@ -405,8 +452,7 @@ def rewrite_asset_paths(content, assets_folder, assets_tracking, md_filename):
 def create_root_folder_index_file(path, restored_content=""):
     """ Create _index.md file for root directory """
 
-    content = f"""
-+++
+    content = f"""+++
 title = "External-Secrets Operator Documentation (Unreleased)"
 linkTitle = "ESO Documentation (unreleased)"
 weight = 1
@@ -698,7 +744,7 @@ def replace_yaml_includes(content, snippet_dest_folder, missing_snippets, md_fil
     pattern_include = r'{%\s*include\s+["\']([^"\']+)["\']\s*%}'
     modified_content = re.sub(pattern_include, replace_include, modified_content)
 
-    # Pattern 3: MkDocs snippets syntax: --8<-- "path/to/file"
+    # Pattern 3: MkDocs snippets syntax: --8<-- "path/to/file.yaml"
     pattern_mkdocs_yaml = r'--8<--\s+"([^"]+.yaml)"'
     modified_content = re.sub(pattern_mkdocs_yaml, replace_include, modified_content)
 
@@ -809,7 +855,8 @@ def main():
             'title': title,
             'section': None,
             'subsection': None,
-            'weight': unmatched_weight
+            'weight': unmatched_weight,
+            'output_path': unmatched_file  # Use the same path for unmatched files
         }
 
     print("Creating directory index files...")
@@ -834,8 +881,9 @@ def main():
     for filepath, metadata in file_metadata.items():
         src_path = os.path.join(args.source, filepath)
 
-        # Preserve directory structure from source
-        dst_path = os.path.join(args.dest, filepath)
+        # Use output_path if available (for renamed files like index.md -> introduction.md)
+        output_filepath = metadata.get('output_path', filepath)
+        dst_path = os.path.join(args.dest, output_filepath)
 
         # Create parent directory if it doesn't exist
         dst_dir = os.path.dirname(dst_path)
