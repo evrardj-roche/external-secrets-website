@@ -77,6 +77,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -119,10 +120,12 @@ var (
 // Structures
 
 type FileMeta struct {
-	Title      string
-	Section    string
-	Subsection string
-	Weight     int
+	Title       string
+	Section     string
+	Subsection  string
+	Weight      int
+	SourcePath  string // Original path from mkdocs.yml (for reading source file)
+	DestPath    string // Destination path with section hierarchy (for writing output)
 }
 
 type SectionMeta struct {
@@ -211,9 +214,12 @@ func main() {
 
 	fmt.Println("Checking for snippets folder...")
 	dstSnippetsFolder := filepath.Join(*dstDir, "snippets")
-	snippetsFound := copySnippetsFolder(*srcDir, dstSnippetsFolder, &migrationRecords)
+	snippetsFound, snippetMarkdownFiles := copySnippetsFolder(*srcDir, dstSnippetsFolder, &migrationRecords)
 	if snippetsFound {
 		fmt.Printf("  Copied snippets folder to %s\n", dstSnippetsFolder)
+		if len(snippetMarkdownFiles) > 0 {
+			fmt.Printf("  Found %d markdown files in snippets to be processed as content files\n", len(snippetMarkdownFiles))
+		}
 	} else {
 		fmt.Println("  No snippets folder found in source directory")
 	}
@@ -255,8 +261,8 @@ func main() {
 
 	// Determine unmatched files
 	matchedSet := map[string]bool{}
-	for k := range fileMeta {
-		matchedSet[k] = true
+	for _, meta := range fileMeta {
+		matchedSet[meta.SourcePath] = true
 	}
 	unmatchedList := []string{}
 	for f := range allMd {
@@ -279,12 +285,43 @@ func main() {
 	for _, u := range unmatchedList {
 		unmatchedWeight += 10
 		title := deriveTitleFromFilename(u)
+		// For unmatched files, SourcePath and DestPath are the same (no reorganization)
 		fileMeta[u] = FileMeta{
 			Title:      title,
 			Section:    "",
 			Subsection: "",
 			Weight:     unmatchedWeight,
+			SourcePath: u,
+			DestPath:   u,
 		}
+	}
+
+	// Track mapping from snippet paths to content paths for link rewriting
+	snippetToContentMap := make(map[string]string)
+
+	// Process snippet markdown files as content files
+	for _, snippetMd := range snippetMarkdownFiles {
+		unmatchedWeight += 10
+		// Extract filename without extension for title
+		title := deriveTitleFromFilename(snippetMd)
+		// Add suffix to distinguish from similarly named content files
+		// Create a distinctive filename by adding "-auth" suffix before extension
+		baseName := strings.TrimSuffix(filepath.Base(snippetMd), filepath.Ext(snippetMd))
+		newFileName := baseName + "-auth.md"
+
+		// Store the file using newFileName as the key (dest path)
+		snippetSrcPath := "snippets/" + snippetMd
+		fileMeta[newFileName] = FileMeta{
+			Title:      title,
+			Section:    "",
+			Subsection: "",
+			Weight:     unmatchedWeight,
+			SourcePath: snippetSrcPath,
+			DestPath:   newFileName,
+		}
+
+		// Track the mapping from snippet path to content filename for link rewriting
+		snippetToContentMap[snippetMd] = newFileName
 	}
 
 	// Create section _index.md files
@@ -322,10 +359,21 @@ func main() {
 	}
 	sort.Strings(fileKeys)
 
-	for _, filepathRel := range fileKeys {
-		meta := fileMeta[filepathRel]
-		srcPath := filepath.Join(*srcDir, filepath.FromSlash(filepathRel))
-		dstPath := filepath.Join(*dstDir, filepath.FromSlash(filepathRel))
+	for _, destPathKey := range fileKeys {
+		meta := fileMeta[destPathKey]
+		// Use SourcePath for reading (original mkdocs path), DestPath for writing (with hierarchy)
+		srcPath := filepath.Join(*srcDir, filepath.FromSlash(meta.SourcePath))
+		dstPath := filepath.Join(*dstDir, filepath.FromSlash(meta.DestPath))
+
+		// Check if this is a snippet markdown file that needs special handling
+		if strings.HasPrefix(meta.SourcePath, "snippets/") && strings.HasSuffix(strings.ToLower(meta.SourcePath), ".md") {
+			snippetRelPath := strings.TrimPrefix(meta.SourcePath, "snippets/")
+			if newFileName, ok := snippetToContentMap[snippetRelPath]; ok {
+				// Adjust destination path to place it in content root, not snippets folder
+				dstPath = filepath.Join(*dstDir, newFileName)
+			}
+		}
+
 		// Ensure parent dir exists
 		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating parent dir for %s: %v\n", dstPath, err)
@@ -338,13 +386,14 @@ func main() {
 			errorCount++
 			continue
 		}
-		if err := convertFile(srcPath, dstPath, meta, srcAssetFolders, *dstAssetsFolder, &copiedAssets, dstSnippetsFolder, &missingSnippets, &migrationRecords, &externalURLsReported, matchedSet[filepathRel], filepathRel); err != nil {
-			fmt.Fprintf(os.Stderr, "Error converting %s: %v\n", filepathRel, err)
+		inMkdocsNav := matchedSet[meta.SourcePath]
+		if err := convertFile(srcPath, dstPath, meta, srcAssetFolders, *dstAssetsFolder, &copiedAssets, dstSnippetsFolder, &missingSnippets, &migrationRecords, &externalURLsReported, inMkdocsNav, meta.SourcePath, snippetToContentMap); err != nil {
+			fmt.Fprintf(os.Stderr, "Error converting %s: %v\n", meta.SourcePath, err)
 			errorCount++
 			continue
 		}
 		convertedCount++
-		if matchedSet[filepathRel] {
+		if inMkdocsNav {
 			convertedMatched++
 		} else {
 			convertedUnmatched++
@@ -427,6 +476,21 @@ func deriveTitleFromFilename(path string) string {
 	return strings.Title(name)
 }
 
+// slugify converts a section title to a directory-safe slug
+// e.g., "API Types" -> "api-types", "Core Resources" -> "core-resources"
+func slugify(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, " ", "-")
+	s = strings.ReplaceAll(s, "_", "-")
+	// Remove any non-alphanumeric characters except hyphens
+	s = regexp.MustCompile(`[^a-z0-9-]+`).ReplaceAllString(s, "")
+	// Remove duplicate hyphens
+	s = regexp.MustCompile(`-+`).ReplaceAllString(s, "-")
+	// Trim hyphens from start/end
+	s = strings.Trim(s, "-")
+	return s
+}
+
 // parseMkdocsNav parses mkdocs.yml, extracts nav and builds file and section metadata.
 //
 // Behavior: walks nav entries in order, assigns weights incrementally by 10.
@@ -470,8 +534,9 @@ func parseMkdocsNav(yamlPath, sourceDir string) (map[string]FileMeta, map[string
 	// Helper function to process an item which can be:
 	// - map[string]interface{} with one key -> either file or subsection
 	// - string (filename)
-	var processList func(items []interface{}, currentSection, currentSubsection string)
-	processList = func(items []interface{}, currentSection, currentSubsection string) {
+	// sectionPath is the accumulated directory path from nav hierarchy (e.g., "api/core-resources")
+	var processList func(items []interface{}, currentSection, currentSubsection, sectionPath string)
+	processList = func(items []interface{}, currentSection, currentSubsection, sectionPath string) {
 		for _, it := range items {
 			switch v := it.(type) {
 			case map[string]interface{}:
@@ -485,18 +550,32 @@ func parseMkdocsNav(yamlPath, sourceDir string) (map[string]FileMeta, map[string
 						filepathStr := filepath.ToSlash(vv)
 						// sometimes val may be quoted filename only; ensures .md
 						if strings.HasSuffix(strings.ToLower(filepathStr), ".md") {
-							// Check existence in source dir
+							// Check existence in source dir (use original path)
 							full := filepath.Join(sourceDir, filepath.FromSlash(filepathStr))
 							if exists(full) {
-								// record
-								fileMetadata[filepathStr] = FileMeta{
+								// Build destination path: if file already has dir structure, use it;
+								// otherwise prepend sectionPath
+								destPath := filepathStr
+								fileDir := path.Dir(filepathStr)
+								if fileDir == "." || fileDir == "" {
+									// File has no directory in source, so prepend sectionPath
+									if sectionPath != "" {
+										destPath = path.Join(sectionPath, filepath.Base(filepathStr))
+									}
+								}
+
+								// Store with destPath as key (this is where it will be written)
+								fileMetadata[destPath] = FileMeta{
 									Title:      title,
 									Section:    currentSection,
 									Subsection: currentSubsection,
 									Weight:     weight,
+									SourcePath: filepathStr, // Original path for reading
+									DestPath:   destPath,    // Destination path for writing
 								}
-								// register section metadata for its dir
-								dir := filepath.Dir(filepathStr)
+
+								// Register section metadata for destination directory
+								dir := path.Dir(destPath)
 								if dir != "." && dir != "" {
 									if _, ok := sectionMetadata[dir]; !ok {
 										sectionMetadata[dir] = SectionMeta{Title: currentSection, Weight: weight}
@@ -508,8 +587,24 @@ func parseMkdocsNav(yamlPath, sourceDir string) (map[string]FileMeta, map[string
 						// key is a section header (e.g., "Section": [ ... ])
 						weight += 10
 						sectionTitle := key
-						// process children with this sectionTitle
-						processList(vv, sectionTitle, "")
+						// Build new section path by appending slugified section name
+						newSectionPath := sectionPath
+						sectionSlug := slugify(sectionTitle)
+						if sectionSlug != "" {
+							if newSectionPath == "" {
+								newSectionPath = sectionSlug
+							} else {
+								newSectionPath = path.Join(newSectionPath, sectionSlug)
+							}
+						}
+						// Register this section
+						if newSectionPath != "" && newSectionPath != sectionPath {
+							if _, ok := sectionMetadata[newSectionPath]; !ok {
+								sectionMetadata[newSectionPath] = SectionMeta{Title: sectionTitle, Weight: weight}
+							}
+						}
+						// process children with this sectionTitle and new section path
+						processList(vv, sectionTitle, "", newSectionPath)
 					default:
 						// Unhandled types: try to marshal to yaml then interpret
 						// if it's a map[string]string or similar
@@ -518,7 +613,24 @@ func parseMkdocsNav(yamlPath, sourceDir string) (map[string]FileMeta, map[string
 						var childList []interface{}
 						if err := yaml.Unmarshal(b, &childList); err == nil {
 							weight += 10
-							processList(childList, key, "")
+							sectionTitle := key
+							// Build new section path
+							newSectionPath := sectionPath
+							sectionSlug := slugify(sectionTitle)
+							if sectionSlug != "" {
+								if newSectionPath == "" {
+									newSectionPath = sectionSlug
+								} else {
+									newSectionPath = path.Join(newSectionPath, sectionSlug)
+								}
+							}
+							// Register this section
+							if newSectionPath != "" && newSectionPath != sectionPath {
+								if _, ok := sectionMetadata[newSectionPath]; !ok {
+									sectionMetadata[newSectionPath] = SectionMeta{Title: sectionTitle, Weight: weight}
+								}
+							}
+							processList(childList, key, "", newSectionPath)
 						}
 					}
 				}
@@ -530,13 +642,26 @@ func parseMkdocsNav(yamlPath, sourceDir string) (map[string]FileMeta, map[string
 					title := deriveTitleFromFilename(fp)
 					full := filepath.Join(sourceDir, filepath.FromSlash(fp))
 					if exists(full) {
-						fileMetadata[fp] = FileMeta{
+						// Build destination path
+						destPath := fp
+						fileDir := path.Dir(fp)
+						if fileDir == "." || fileDir == "" {
+							// File has no directory in source, so prepend sectionPath
+							if sectionPath != "" {
+								destPath = path.Join(sectionPath, filepath.Base(fp))
+							}
+						}
+
+						fileMetadata[destPath] = FileMeta{
 							Title:      title,
 							Section:    currentSection,
 							Subsection: currentSubsection,
 							Weight:     weight,
+							SourcePath: fp,
+							DestPath:   destPath,
 						}
-						dir := filepath.Dir(fp)
+						// Register section metadata for destination directory
+						dir := path.Dir(destPath)
 						if dir != "." && dir != "" {
 							if _, ok := sectionMetadata[dir]; !ok {
 								sectionMetadata[dir] = SectionMeta{Title: currentSection, Weight: weight}
@@ -550,7 +675,7 @@ func parseMkdocsNav(yamlPath, sourceDir string) (map[string]FileMeta, map[string
 		}
 	}
 
-	processList(navList, "", "")
+	processList(navList, "", "", "")
 
 	return fileMetadata, sectionMetadata, nil
 }
@@ -898,16 +1023,20 @@ func convertAdmonitions(content string) string {
 	})
 }
 
-// copySnippetsFolder: copies source/snippets to snippetDestFolder, cleaning jinja tags in text files
-func copySnippetsFolder(sourceDir, snippetDestFolder string, migrationRecords *[]MigrationRecord) bool {
+// copySnippetsFolder: copies source/snippets to snippetDestFolder, cleaning jinja tags in text files.
+// Returns a list of .md files found in snippets that should be processed as content files.
+func copySnippetsFolder(sourceDir, snippetDestFolder string, migrationRecords *[]MigrationRecord) (bool, []string) {
 	srcSnippets := filepath.Join(sourceDir, "snippets")
 	if !isDir(srcSnippets) {
-		return false
+		return false, nil
 	}
 	if err := os.MkdirAll(snippetDestFolder, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating snippet dest folder: %v\n", err)
-		return false
+		return false, nil
 	}
+
+	markdownFiles := []string{}
+
 	err := filepath.WalkDir(srcSnippets, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -920,6 +1049,13 @@ func copySnippetsFolder(sourceDir, snippetDestFolder string, migrationRecords *[
 		if d.IsDir() {
 			return os.MkdirAll(dest, 0755)
 		}
+
+		// Skip .md files - they should be processed as content files
+		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+			markdownFiles = append(markdownFiles, filepath.ToSlash(rel))
+			return nil
+		}
+
 		// file
 		// try reading as UTF-8 text; if error copy as binary
 		b, err := ioutil.ReadFile(path)
@@ -959,15 +1095,27 @@ func copySnippetsFolder(sourceDir, snippetDestFolder string, migrationRecords *[
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error copying snippets: %v\n", err)
-		return false
+		return false, markdownFiles
 	}
-	return true
+	return true, markdownFiles
 }
 
-// replaceYamlIncludes: replaces include blocks with Hugo readfile shortcodes,
+// replaceYamlIncludes: replaces include blocks with Hugo readfile shortcodes or links for .md files,
 // records missing snippet references in missingSnippets
-func replaceYamlIncludes(content string, snippetDestFolder string, missingSnippets *[]MissingSnippet, mdFilename string) string {
+func replaceYamlIncludes(content string, snippetDestFolder string, missingSnippets *[]MissingSnippet, mdFilename string, snippetToContentMap map[string]string) string {
 	replaceInclude := func(snippetPath string) string {
+		// Check if this is a markdown file that should be linked instead of included
+		if strings.HasSuffix(strings.ToLower(snippetPath), ".md") {
+			if contentFileName, ok := snippetToContentMap[snippetPath]; ok {
+				// Generate a link to the content file
+				// Extract title from the filename
+				title := deriveTitleFromFilename(contentFileName)
+				// Generate relative link (assuming same directory level)
+				linkTarget := strings.TrimSuffix(contentFileName, ".md")
+				return fmt.Sprintf("For more information, see [%s](../%s/).", title, linkTarget)
+			}
+		}
+
 		fullSnippetPath := filepath.Join(snippetDestFolder, filepath.FromSlash(snippetPath))
 		if !exists(fullSnippetPath) {
 			*missingSnippets = append(*missingSnippets, MissingSnippet{Snippet: snippetPath, ReferencedIn: mdFilename})
@@ -1010,7 +1158,7 @@ func replaceYamlIncludes(content string, snippetDestFolder string, missingSnippe
 }
 
 // convertFile: read source, create front matter, rewrite assets, replace includes, write destination
-func convertFile(srcPath, dstPath string, meta FileMeta, srcAssetFolders []string, dstAssetsFolder string, copiedAssets *map[string]string, snippetDestFolder string, missingSnippets *[]MissingSnippet, migrationRecords *[]MigrationRecord, externalURLsReported *[]ExternalURLReport, inMkdocsNav bool, srcRelPath string) error {
+func convertFile(srcPath, dstPath string, meta FileMeta, srcAssetFolders []string, dstAssetsFolder string, copiedAssets *map[string]string, snippetDestFolder string, missingSnippets *[]MissingSnippet, migrationRecords *[]MigrationRecord, externalURLsReported *[]ExternalURLReport, inMkdocsNav bool, srcRelPath string, snippetToContentMap map[string]string) error {
 	b, err := ioutil.ReadFile(srcPath)
 	if err != nil {
 		return err
@@ -1029,7 +1177,7 @@ func convertFile(srcPath, dstPath string, meta FileMeta, srcAssetFolders []strin
 	mdFilename := filepath.Base(dstPath)
 	content = rewriteAssetPaths(content, srcAssetFolders, dstAssetsFolder, copiedAssets, migrationRecords, externalURLsReported, snippetDestFolder, mdFilename)
 	// Replace includes
-	content = replaceYamlIncludes(content, snippetDestFolder, missingSnippets, mdFilename)
+	content = replaceYamlIncludes(content, snippetDestFolder, missingSnippets, mdFilename, snippetToContentMap)
 	// Combine and write
 	out := front + content
 	err = ioutil.WriteFile(dstPath, []byte(out), 0644)
