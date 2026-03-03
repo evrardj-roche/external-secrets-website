@@ -15,3 +15,5 @@ package-lock.json
 
 # cSpell:ignore hugo
 main
+scripts/converter/converter
+scripts/releases/release
