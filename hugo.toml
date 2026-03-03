@@ -85,7 +85,7 @@ from_year = 2020
 to_year = "present"
 
 [params.ui]
-breadcrumb_disable = false
+breadcrumb_disable = true
 navbar_logo = true
 navbar_translucent_over_cover_disable = false
 sidebar_menu_foldable = true
