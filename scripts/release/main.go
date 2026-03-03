@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -232,15 +233,25 @@ func handleAdd(project string, tag string, releaseDate string, testedK8sVersions
 		log.Fatalf("Failed to copy content: %v", err)
 	}
 
-	// Create version landing page
+	// Adapt version landing page
 	newVersionPath := filepath.Join(newVersionDir, "_index.md")
-	content := fmt.Sprintf(ReleaseLandingPageTemplate,
-		projects[project].ProjectLongName, majorMinor, majorMinor,
-		project, majorMinor, projects[project].ProjectLongName, majorMinor)
 
-	if err := os.WriteFile(newVersionPath, []byte(content), 0644); err != nil {
+	// Read the file and replace "Unreleased" (case insensitive) with majorMinor
+	content, err := os.ReadFile(newVersionPath)
+	if err != nil {
+		log.Fatalf("Failed to read version file: %v", err)
+	}
+
+	// Replace "Unreleased" (case insensitive) with majorMinor
+	text := string(content)
+	re := regexp.MustCompile(`(?i)unreleased`)
+	text = re.ReplaceAllString(text, majorMinor)
+
+	// Write the updated content back
+	if err := os.WriteFile(newVersionPath, []byte(text), 0644); err != nil {
 		log.Fatal(err)
 	}
+
 	fmt.Printf("Overwritten %s\n", newVersionPath)
 
 	fmt.Printf("\nRelease %s added successfully!\n", tag)
