@@ -136,6 +136,109 @@ func TestDeriveTitleFromFilename(t *testing.T) {
 	}
 }
 
+// TestRewriteMarkdownLinks tests the link rewriting functionality
+func TestRewriteMarkdownLinks(t *testing.T) {
+	// Build a sample file metadata map
+	fileMeta := map[string]FileMeta{
+		"guides/guides-templating.md": {
+			SourcePath: "guides-templating.md",
+			DestPath:   "guides/guides-templating.md",
+		},
+		"provider/google/provider-google-secrets-manager.md": {
+			SourcePath: "provider-google-secrets-manager.md",
+			DestPath:   "provider/google/provider-google-secrets-manager.md",
+		},
+		"api-overview.md": {
+			SourcePath: "api-overview.md",
+			DestPath:   "api-overview.md",
+		},
+		"guides/guides-common-k8s-secret-types.md": {
+			SourcePath: "guides-common-k8s-secret-types.md",
+			DestPath:   "guides/guides-common-k8s-secret-types.md",
+		},
+	}
+
+	filenameToDestMap := buildFilenameToDestMap(fileMeta)
+
+	tests := []struct {
+		name            string
+		content         string
+		currentDestPath string
+		expectedLink    string
+		description     string
+	}{
+		{
+			name: "Same directory link",
+			content: `Check the [templating guide](guides-templating.md) for details.`,
+			currentDestPath: "guides/guides-common-k8s-secret-types.md",
+			expectedLink: "[templating guide](guides-templating.md)",
+			description: "Link to file in same directory should be relative",
+		},
+		{
+			name: "Cross-directory link",
+			content: `See [Google Secrets Manager](provider-google-secrets-manager.md) guide.`,
+			currentDestPath: "guides/guides-common-k8s-secret-types.md",
+			expectedLink: "[Google Secrets Manager](../provider/google/provider-google-secrets-manager.md)",
+			description: "Link from guides/ to provider/google/ should go up and down",
+		},
+		{
+			name: "Link to root from subdirectory",
+			content: `Read the [API overview](api-overview.md) first.`,
+			currentDestPath: "guides/guides-templating.md",
+			expectedLink: "[API overview](../api-overview.md)",
+			description: "Link from guides/ to root should go up one level",
+		},
+		{
+			name: "Link with fragment",
+			content: `See [section](guides-templating.md#advanced) for details.`,
+			currentDestPath: "guides/guides-common-k8s-secret-types.md",
+			expectedLink: "[section](guides-templating.md#advanced)",
+			description: "Links with fragments should preserve the fragment",
+		},
+		{
+			name: "External link unchanged",
+			content: `Visit [External](https://example.com/page.md) site.`,
+			currentDestPath: "guides/guides-templating.md",
+			expectedLink: "[External](https://example.com/page.md)",
+			description: "External links should not be modified",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := rewriteMarkdownLinks(tt.content, tt.currentDestPath, filenameToDestMap)
+			if !contains(result, tt.expectedLink) {
+				t.Errorf("%s\nExpected link: %s\nGot result: %s", tt.description, tt.expectedLink, result)
+			}
+		})
+	}
+}
+
+// TestBuildFilenameToDestMap tests the filename mapping function
+func TestBuildFilenameToDestMap(t *testing.T) {
+	fileMeta := map[string]FileMeta{
+		"guides/guides-templating.md": {
+			SourcePath: "guides-templating.md",
+			DestPath:   "guides/guides-templating.md",
+		},
+		"provider/google/provider-google-secrets-manager.md": {
+			SourcePath: "provider-google-secrets-manager.md",
+			DestPath:   "provider/google/provider-google-secrets-manager.md",
+		},
+	}
+
+	filenameMap := buildFilenameToDestMap(fileMeta)
+
+	// Check that source filenames map to destination paths
+	if dest, ok := filenameMap["guides-templating.md"]; !ok || dest != "guides/guides-templating.md" {
+		t.Errorf("Expected guides-templating.md to map to guides/guides-templating.md, got %s", dest)
+	}
+
+	if dest, ok := filenameMap["provider-google-secrets-manager.md"]; !ok || dest != "provider/google/provider-google-secrets-manager.md" {
+		t.Errorf("Expected provider-google-secrets-manager.md to map to provider/google/provider-google-secrets-manager.md, got %s", dest)
+	}
+}
+
 // Helper function
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsMiddle(s, substr)))

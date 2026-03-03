@@ -115,6 +115,8 @@ var (
 	reMkdocsSnippet    = regexp.MustCompile(`--8<--\s+"([^"]+)"`)
 	// External-secrets.io URL pattern
 	reExternalSecretsURL = regexp.MustCompile(`https://external-secrets\.io/[^\s\)]+`)
+	// Markdown link pattern for rewriting internal links
+	reMarkdownLink = regexp.MustCompile(`\[([^\]]*)\]\(([^)]+)\)`)
 )
 
 // Structures
@@ -345,6 +347,10 @@ func main() {
 	// Missing snippets
 	missingSnippets := []MissingSnippet{}
 
+	// Build filename-to-destination-path map for link rewriting
+	fmt.Println("Building file mapping for link rewriting...")
+	filenameToDestMap := buildFilenameToDestMap(fileMeta)
+
 	// Convert files
 	fmt.Println("\nConverting markdown files...")
 	convertedCount := 0
@@ -387,7 +393,7 @@ func main() {
 			continue
 		}
 		inMkdocsNav := matchedSet[meta.SourcePath]
-		if err := convertFile(srcPath, dstPath, meta, srcAssetFolders, *dstAssetsFolder, &copiedAssets, dstSnippetsFolder, &missingSnippets, &migrationRecords, &externalURLsReported, inMkdocsNav, meta.SourcePath, snippetToContentMap); err != nil {
+		if err := convertFile(srcPath, dstPath, meta, srcAssetFolders, *dstAssetsFolder, &copiedAssets, dstSnippetsFolder, &missingSnippets, &migrationRecords, &externalURLsReported, inMkdocsNav, meta.SourcePath, snippetToContentMap, filenameToDestMap); err != nil {
 			fmt.Fprintf(os.Stderr, "Error converting %s: %v\n", meta.SourcePath, err)
 			errorCount++
 			continue
@@ -1157,8 +1163,127 @@ func replaceYamlIncludes(content string, snippetDestFolder string, missingSnippe
 	return content
 }
 
+// buildFilenameToDestMap creates a map from source filename (basename) to destination path
+// This is used for rewriting internal markdown links
+func buildFilenameToDestMap(fileMeta map[string]FileMeta) map[string]string {
+	filenameMap := make(map[string]string)
+	for _, meta := range fileMeta {
+		sourceBase := filepath.Base(meta.SourcePath)
+		// Store mapping from source filename to destination path
+		filenameMap[sourceBase] = meta.DestPath
+	}
+	return filenameMap
+}
+
+// rewriteMarkdownLinks rewrites internal markdown links to reflect new file locations
+// It converts links like [text](file.md) to use correct relative paths or Hugo relref
+func rewriteMarkdownLinks(content string, currentDestPath string, filenameToDestMap map[string]string) string {
+	return reMarkdownLink.ReplaceAllStringFunc(content, func(m string) string {
+		sub := reMarkdownLink.FindStringSubmatch(m)
+		if len(sub) < 3 {
+			return m
+		}
+		linkText := sub[1]
+		linkPath := strings.TrimSpace(sub[2])
+
+		// Skip external URLs
+		if strings.HasPrefix(linkPath, "http://") || strings.HasPrefix(linkPath, "https://") {
+			return m
+		}
+
+		// Skip anchors only
+		if strings.HasPrefix(linkPath, "#") {
+			return m
+		}
+
+		// Extract the filename from the link (it might have a fragment like file.md#section)
+		linkParts := strings.SplitN(linkPath, "#", 2)
+		linkedFile := linkParts[0]
+		fragment := ""
+		if len(linkParts) > 1 {
+			fragment = "#" + linkParts[1]
+		}
+
+		// Skip non-markdown links (after extracting fragment)
+		if !strings.HasSuffix(strings.ToLower(linkedFile), ".md") {
+			return m
+		}
+
+		// Look up the destination path for this linked file
+		destPath, found := filenameToDestMap[linkedFile]
+		if !found {
+			// File not found in our mapping, leave link as-is
+			return m
+		}
+
+		// Calculate relative path from current file to linked file
+		currentDir := path.Dir(currentDestPath)
+
+		// Build relative path to the destination .md file
+		var relativePath string
+		if currentDir == "." || currentDir == "" {
+			// Current file is at root, link directly to destPath
+			relativePath = destPath
+		} else {
+			// Calculate relative path between directories
+			currentParts := strings.Split(currentDir, "/")
+			targetDir := path.Dir(destPath)
+			var targetParts []string
+			if targetDir != "." && targetDir != "" {
+				targetParts = strings.Split(targetDir, "/")
+			}
+
+			// Find common prefix
+			commonLen := 0
+			for i := 0; i < len(currentParts) && i < len(targetParts); i++ {
+				if currentParts[i] == targetParts[i] {
+					commonLen++
+				} else {
+					break
+				}
+			}
+
+			// Build relative path with ../ for going up and path segments for going down
+			upLevels := len(currentParts) - commonLen
+			downPath := ""
+			if len(targetParts) > commonLen {
+				downPath = strings.Join(targetParts[commonLen:], "/")
+			}
+
+			targetFilename := path.Base(destPath)
+
+			if upLevels == 0 {
+				// Same directory level
+				if downPath == "" {
+					relativePath = targetFilename
+				} else {
+					relativePath = downPath + "/" + targetFilename
+				}
+			} else {
+				// Need to go up
+				upPath := strings.Repeat("../", upLevels)
+				if downPath == "" {
+					relativePath = upPath + targetFilename
+				} else {
+					relativePath = upPath + downPath + "/" + targetFilename
+				}
+			}
+		}
+
+		// Build the new link with the fragment if present
+		var newLink string
+		if fragment != "" {
+			newLink = fmt.Sprintf("[%s](%s%s)", linkText, relativePath, fragment)
+		} else {
+			newLink = fmt.Sprintf("[%s](%s)", linkText, relativePath)
+		}
+
+		return newLink
+	})
+}
+
 // convertFile: read source, create front matter, rewrite assets, replace includes, write destination
-func convertFile(srcPath, dstPath string, meta FileMeta, srcAssetFolders []string, dstAssetsFolder string, copiedAssets *map[string]string, snippetDestFolder string, missingSnippets *[]MissingSnippet, migrationRecords *[]MigrationRecord, externalURLsReported *[]ExternalURLReport, inMkdocsNav bool, srcRelPath string, snippetToContentMap map[string]string) error {
+func convertFile(srcPath, dstPath string, meta FileMeta, srcAssetFolders []string, dstAssetsFolder string, copiedAssets *map[string]string, snippetDestFolder string, missingSnippets *[]MissingSnippet, migrationRecords *[]MigrationRecord, externalURLsReported *[]ExternalURLReport, inMkdocsNav bool, srcRelPath string, snippetToContentMap map[string]string, filenameToDestMap map[string]string) error {
 	b, err := ioutil.ReadFile(srcPath)
 	if err != nil {
 		return err
@@ -1178,6 +1303,8 @@ func convertFile(srcPath, dstPath string, meta FileMeta, srcAssetFolders []strin
 	content = rewriteAssetPaths(content, srcAssetFolders, dstAssetsFolder, copiedAssets, migrationRecords, externalURLsReported, snippetDestFolder, mdFilename)
 	// Replace includes
 	content = replaceYamlIncludes(content, snippetDestFolder, missingSnippets, mdFilename, snippetToContentMap)
+	// Rewrite internal markdown links to reflect new file locations
+	content = rewriteMarkdownLinks(content, meta.DestPath, filenameToDestMap)
 	// Combine and write
 	out := front + content
 	err = ioutil.WriteFile(dstPath, []byte(out), 0644)
