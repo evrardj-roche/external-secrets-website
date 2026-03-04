@@ -1,6 +1,468 @@
 [[versions]]
-  tag = "v0.9.0"
+  tag = "v2.0.0"
   latest = true
+  release_date = "2026-02-06"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v1.3.2"
+  latest = false
+  release_date = "2026-02-03"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v1.3.1"
+  latest = false
+  release_date = "2026-01-23"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v1.3.0"
+  latest = false
+  release_date = "2026-01-23"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v1.2.1"
+  latest = false
+  release_date = "2026-01-02"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v1.2.0"
+  latest = false
+  release_date = "2025-12-19"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v1.1.1"
+  latest = false
+  release_date = "2025-12-05"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v1.1.0"
+  latest = false
+  release_date = "2025-11-21"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v1.0.0"
+  latest = false
+  release_date = "2025-11-07"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.20.4"
+  latest = false
+  release_date = "2025-10-24"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.20.3"
+  latest = false
+  release_date = "2025-10-10"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.20.2"
+  latest = false
+  release_date = "2025-10-03"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.20.1"
+  latest = false
+  release_date = "2025-09-22"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.20.0"
+  latest = false
+  release_date = "2025-09-22"
+  tested_k8s_versions = ["v1.34"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.19.2"
+  latest = false
+  release_date = "2025-08-13"
+  tested_k8s_versions = ["v1.33"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.19.1"
+  latest = false
+  release_date = "2025-08-08"
+  tested_k8s_versions = ["v1.33"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.19.0"
+  latest = false
+  release_date = "2025-08-02"
+  tested_k8s_versions = ["v1.33"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.18.2"
+  latest = false
+  release_date = "2025-07-03"
+  tested_k8s_versions = ["v1.33"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.18.1"
+  latest = false
+  release_date = "2025-06-26"
+  tested_k8s_versions = ["v1.33"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.18.0-rc1"
+  latest = false
+  release_date = "2025-06-16"
+  tested_k8s_versions = ["v1.33"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.18.0"
+  latest = false
+  release_date = "2025-06-17"
+  tested_k8s_versions = ["v1.33"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.17.1-rc1"
+  latest = false
+  release_date = "2025-05-21"
+  tested_k8s_versions = ["v1.33"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.17.0"
+  latest = false
+  release_date = "2025-05-14"
+  tested_k8s_versions = ["v1.33"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.16.2"
+  latest = false
+  release_date = "2025-05-07"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.16.1"
+  latest = false
+  release_date = "2025-04-16"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.16.0"
+  latest = false
+  release_date = "2025-04-14"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.15.1"
+  latest = false
+  release_date = "2025-03-28"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.15.0"
+  latest = false
+  release_date = "2025-03-19"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.14.4"
+  latest = false
+  release_date = "2025-03-10"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.14.3"
+  latest = false
+  release_date = "2025-02-26"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.14.2"
+  latest = false
+  release_date = "2025-02-13"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.14.1"
+  latest = false
+  release_date = "2025-02-06"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.14.0"
+  latest = false
+  release_date = "2025-02-04"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.13.0"
+  latest = false
+  release_date = "2025-01-21"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.12.1"
+  latest = false
+  release_date = "2024-12-23"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.12.0"
+  latest = false
+  release_date = "2024-12-23"
+  tested_k8s_versions = ["v1.32"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.11.0"
+  latest = false
+  release_date = "2024-11-30"
+  tested_k8s_versions = ["v1.31"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.10.7"
+  latest = false
+  release_date = "2024-11-23"
+  tested_k8s_versions = ["v1.31"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.10.6"
+  latest = false
+  release_date = "2024-11-20"
+  tested_k8s_versions = ["v1.31"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.10.5"
+  latest = false
+  release_date = "2024-10-24"
+  tested_k8s_versions = ["v1.31"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.10.4"
+  latest = false
+  release_date = "2024-09-25"
+  tested_k8s_versions = ["v1.31"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.10.3"
+  latest = false
+  release_date = "2024-09-09"
+  tested_k8s_versions = ["v1.31"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.10.2"
+  latest = false
+  release_date = "2024-08-28"
+  tested_k8s_versions = ["v1.31"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.10.1"
+  latest = false
+  release_date = "2024-08-27"
+  tested_k8s_versions = ["v1.31"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.10.0"
+  latest = false
+  release_date = "2024-08-02"
+  tested_k8s_versions = ["v1.30"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.20"
+  latest = false
+  release_date = "2024-07-06"
+  tested_k8s_versions = ["v1.30"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.19"
+  latest = false
+  release_date = "2024-06-04"
+  tested_k8s_versions = ["v1.30"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.18"
+  latest = false
+  release_date = "2024-05-13"
+  tested_k8s_versions = ["v1.30"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.17"
+  latest = false
+  release_date = "2024-04-30"
+  tested_k8s_versions = ["v1.30"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.16"
+  latest = false
+  release_date = "2024-04-18"
+  tested_k8s_versions = ["v1.29"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.15-2"
+  latest = false
+  release_date = "2024-04-11"
+  tested_k8s_versions = ["v1.29"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.15"
+  latest = false
+  release_date = "2024-04-11"
+  tested_k8s_versions = ["v1.29"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.14"
+  latest = false
+  release_date = "2024-03-30"
+  tested_k8s_versions = ["v1.29"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.13"
+  latest = false
+  release_date = "2024-02-17"
+  tested_k8s_versions = ["v1.29"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.12"
+  latest = false
+  release_date = "2024-02-07"
+  tested_k8s_versions = ["v1.29"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.11"
+  latest = false
+  release_date = "2023-12-25"
+  tested_k8s_versions = ["v1.29"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.10"
+  latest = false
+  release_date = "2023-12-14"
+  tested_k8s_versions = ["v1.28"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.9"
+  latest = false
+  release_date = "2023-11-11"
+  tested_k8s_versions = ["v1.28"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.8"
+  latest = false
+  release_date = "2023-10-30"
+  tested_k8s_versions = ["v1.28"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.7"
+  latest = false
+  release_date = "2023-10-20"
+  tested_k8s_versions = ["v1.28"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.6"
+  latest = false
+  release_date = "2023-10-13"
+  tested_k8s_versions = ["v1.28"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.5"
+  latest = false
+  release_date = "2023-09-21"
+  tested_k8s_versions = ["v1.28"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.4"
+  latest = false
+  release_date = "2023-08-23"
+  tested_k8s_versions = ["v1.27"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.3"
+  latest = false
+  release_date = "2023-08-15"
+  tested_k8s_versions = ["v1.27"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.2"
+  latest = false
+  release_date = "2023-08-03"
+  tested_k8s_versions = ["v1.27"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.1"
+  latest = false
+  release_date = "2023-07-07"
+  tested_k8s_versions = ["v1.27"]
+  end_of_life = ""
+
+[[versions]]
+  tag = "v0.9.0"
+  latest = false
   release_date = "2023-06-22"
   tested_k8s_versions = ["1.27"]
   end_of_life = ""
