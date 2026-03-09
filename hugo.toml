@@ -47,6 +47,10 @@ block = true
 [markup.goldmark.renderer]
 unsafe = true
 
+[sitemap]
+changefreq = "daily"
+filename = "sitemap.xml"
+
 [outputs]
 home = [ "HTML", "print", "RSS", "JSON", "redirects" ]
 section = [ "HTML", "print", "RSS" ]
