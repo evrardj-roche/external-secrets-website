@@ -146,30 +146,37 @@
     }
 
     //
-    // Register handler
-    //
-
-    $searchInput.on('change', (event) => {
-      render($(event.target));
-
-      // Hide keyboard on mobile browser
-      $searchInput.blur();
-    });
-
-    // Prevent reloading page by enter key on sidebar search.
-    $searchInput.closest('form').on('submit', () => {
-      return false;
-    });
-
-    //
     // Lunr
     //
 
     let idx = null; // Lunr index
     const resultDetails = new Map(); // Will hold the data for the search results (titles and summaries)
 
-    // Set up for an Ajax call to request the JSON data file that is created by Hugo's build process
-    $.ajax($searchInput.data('offline-search-index-json-src')).then((data) => {
+    // The index URL in production includes an MD5 fingerprint (added by Docsy/Hugo), so it
+    // changes whenever content changes. Using it as the cache key gives free invalidation on
+    // every deploy without any extra work.
+    const indexUrl = $searchInput.data('offline-search-index-json-src');
+    const CACHE_PREFIX = 'offline-search-v1:';
+    const CACHE_KEY = CACHE_PREFIX + indexUrl;
+
+    // Attempt to restore a previously built index from localStorage.
+    // Returns true on success, false if nothing usable is cached.
+    function loadIndexFromCache() {
+      try {
+        const stored = localStorage.getItem(CACHE_KEY);
+        if (!stored) return false;
+        const { index, details } = JSON.parse(stored);
+        idx = lunr.Index.load(index);
+        details.forEach(([k, v]) => resultDetails.set(k, v));
+        return true;
+      } catch (e) {
+        // Corrupted or missing cache. rebuild from network.
+        return false;
+      }
+    }
+
+    // Build the lunr index from raw JSON data and persist it to localStorage.
+    function buildIndexFromData(data) {
       idx = lunr(function () {
         this.ref('ref');
 
@@ -197,7 +204,73 @@
         });
       });
 
-      $searchInput.trigger('change');
+      // Persist the built index so subsequent page loads skip the network fetch and rebuild.
+      // Remove any stale entries from previous deploys (different fingerprinted URLs) first.
+      try {
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(CACHE_PREFIX) && key !== CACHE_KEY) {
+            localStorage.removeItem(key);
+          }
+        }
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+          index: idx.toJSON(),
+          details: [...resultDetails.entries()],
+        }));
+      } catch (e) {
+        // Storage quota exceeded or unavailable. not critical, search still works.
+      }
+    }
+
+    // Lazily load and index the search data. Only runs once; subsequent calls return
+    // the same promise. On page load nothing is fetched until the user interacts with
+    // the search box.
+    let indexLoadPromise = null;
+
+    function ensureIndexLoaded() {
+      if (indexLoadPromise) return indexLoadPromise;
+
+      if (loadIndexFromCache()) {
+        // Cache hit: index is already in memory, nothing to fetch or build.
+        indexLoadPromise = Promise.resolve();
+        return indexLoadPromise;
+      }
+
+      // Cache miss: fetch the raw JSON and build the lunr index.
+      indexLoadPromise = Promise.resolve($.ajax(indexUrl)).then(buildIndexFromData);
+      return indexLoadPromise;
+    }
+
+    //
+    // Register handler
+    //
+
+    $searchInput.on('change', (event) => {
+      const $target = $(event.target);
+
+      // Show immediate feedback before the (possibly slow) index load.
+      if (idx === null && $target.val()) {
+        let existing = bootstrap.Popover.getInstance($target[0]);
+        if (existing) existing.dispose();
+        new bootstrap.Popover($target[0], {
+          content: document.createTextNode('Searching\u2026'),
+          html: true,
+          customClass: 'td-offline-search-results',
+          placement: 'bottom',
+        }).show();
+      }
+
+      ensureIndexLoaded().then(() => {
+        render($target);
+      });
+
+      // Hide keyboard on mobile browser
+      $searchInput.blur();
+    });
+
+    // Prevent reloading page by enter key on sidebar search.
+    $searchInput.closest('form').on('submit', () => {
+      return false;
     });
 
     const render = ($targetSearchInput) => {
